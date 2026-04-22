@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prompt Quest</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <script src="prompts.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <h1 class="visually-hidden">Prompt Quest</h1>
+      <main class="map-view" id="map-view" tabindex="-1" aria-label="Prompt Quest overworld map">
+        <section class="adventure-hud" aria-label="Map controls">
+          <p class="hud-title pixel-text">Panther Mode</p>
+
+          <div class="hud-keys" aria-hidden="true">
+            <span class="keycap pixel-text">W</span>
+            <span class="keycap pixel-text">A</span>
+            <span class="keycap pixel-text">S</span>
+            <span class="keycap pixel-text">D</span>
+            <span class="keycap pixel-text keycap-wide">SPACE</span>
+          </div>
+
+          <p class="hud-copy">
+            Tap any zone, or guide Paws the panther with WASD and press SPACE
+            when touching a zone.
+          </p>
+
+          <p class="hud-status pixel-text" id="panther-status">
+            Walk to a zone to activate it.
+          </p>
+        </section>
+
+        <div class="map-foliage corner-top-left" aria-hidden="true">
+          <span>🌲</span>
+          <span>🌿</span>
+          <span>🌲</span>
+        </div>
+        <div class="map-foliage corner-top-right" aria-hidden="true">
+          <span>🌲</span>
+          <span>🌿</span>
+          <span>🌲</span>
+        </div>
+        <div class="map-foliage corner-bottom-left" aria-hidden="true">
+          <span>🌳</span>
+          <span>🌿</span>
+          <span>🌲</span>
+        </div>
+        <div class="map-foliage corner-bottom-right" aria-hidden="true">
+          <span>🌲</span>
+          <span>🌿</span>
+          <span>🌳</span>
+        </div>
+
+        <div class="map-path" aria-hidden="true"></div>
+
+        <div class="panther-avatar" id="panther-avatar" aria-hidden="true">
+          <div class="panther-shadow"></div>
+          <div class="panther-sprite-wrap">
+            <svg
+              class="panther-sprite"
+              viewBox="0 0 32 32"
+              role="presentation"
+              focusable="false"
+              aria-hidden="true"
+            >
+              <rect x="8" y="3" width="5" height="4" fill="#131018"></rect>
+              <rect x="19" y="3" width="5" height="4" fill="#131018"></rect>
+              <rect x="9" y="4" width="3" height="2" fill="#3b3340"></rect>
+              <rect x="20" y="4" width="3" height="2" fill="#3b3340"></rect>
+              <rect x="10" y="5" width="2" height="1" fill="#f4a2b4"></rect>
+              <rect x="20" y="5" width="2" height="1" fill="#f4a2b4"></rect>
+              <rect x="8" y="7" width="16" height="10" fill="#16121a"></rect>
+              <rect x="7" y="8" width="1" height="7" fill="#16121a"></rect>
+              <rect x="24" y="8" width="1" height="7" fill="#16121a"></rect>
+              <rect x="10" y="8" width="12" height="3" fill="#2b2430"></rect>
+              <rect x="9" y="11" width="14" height="3" fill="#201922"></rect>
+              <rect x="10" y="11" width="4" height="2" fill="#d9b34b"></rect>
+              <rect x="18" y="11" width="4" height="2" fill="#d9b34b"></rect>
+              <rect x="11" y="11" width="2" height="2" fill="#120e12"></rect>
+              <rect x="19" y="11" width="2" height="2" fill="#120e12"></rect>
+              <rect x="12" y="14" width="8" height="1" fill="#3b3340"></rect>
+              <rect x="11" y="15" width="10" height="4" fill="#bdb3b5"></rect>
+              <rect x="12" y="15" width="8" height="1" fill="#d5cdd0"></rect>
+              <rect x="14" y="15" width="4" height="1" fill="#f4e7ea"></rect>
+              <rect x="15" y="16" width="2" height="2" fill="#9e5b65"></rect>
+              <rect x="13" y="18" width="6" height="1" fill="#9f8f93"></rect>
+              <rect x="14" y="18" width="1" height="2" fill="#7b6e72"></rect>
+              <rect x="17" y="18" width="1" height="2" fill="#7b6e72"></rect>
+              <rect x="12" y="16" width="1" height="1" fill="#7a6a70"></rect>
+              <rect x="19" y="16" width="1" height="1" fill="#7a6a70"></rect>
+              <rect x="10" y="16" width="2" height="1" fill="#cbc2c5"></rect>
+              <rect x="20" y="16" width="2" height="1" fill="#cbc2c5"></rect>
+              <rect x="8" y="15" width="3" height="1" fill="#2a242d"></rect>
+              <rect x="21" y="15" width="3" height="1" fill="#2a242d"></rect>
+              <rect x="8" y="17" width="3" height="1" fill="#2a242d"></rect>
+              <rect x="21" y="17" width="3" height="1" fill="#2a242d"></rect>
+              <rect x="11" y="19" width="10" height="6" fill="#1b161f"></rect>
+              <rect x="12" y="20" width="8" height="3" fill="#302833"></rect>
+              <rect x="10" y="21" width="1" height="4" fill="#16121a"></rect>
+              <rect x="21" y="21" width="1" height="4" fill="#16121a"></rect>
+              <rect x="9" y="22" width="1" height="5" fill="#16121a"></rect>
+              <rect x="22" y="22" width="1" height="4" fill="#16121a"></rect>
+              <rect x="8" y="23" width="1" height="3" fill="#16121a"></rect>
+              <rect x="7" y="24" width="1" height="2" fill="#16121a"></rect>
+              <rect x="12" y="25" width="2" height="4" fill="#16121a"></rect>
+              <rect x="18" y="25" width="2" height="4" fill="#16121a"></rect>
+              <rect x="12" y="29" width="2" height="1" fill="#efe2e4"></rect>
+              <rect x="18" y="29" width="2" height="1" fill="#efe2e4"></rect>
+              <rect x="6" y="25" width="1" height="2" fill="#16121a"></rect>
+              <rect x="5" y="26" width="1" height="2" fill="#16121a"></rect>
+            </svg>
+          </div>
+        </div>
+
+        <section class="zone-column" aria-label="Prompt zones">
+          <div class="start-marker">
+            <span class="start-label pixel-text">⭐ START HERE</span>
+            <span class="start-arrow pixel-text" aria-hidden="true">↓</span>
+          </div>
+
+          <button
+            class="zone-card"
+            type="button"
+            data-zone-id="forge"
+            aria-controls="zone-drawer"
+            aria-label="Open The Forge Build It prompt"
+          >
+            <span class="zone-badge" hidden aria-hidden="true">✅</span>
+            <span class="zone-index pixel-text">Zone 1</span>
+            <span class="zone-emoji" aria-hidden="true">🏰</span>
+            <span class="zone-name pixel-text">The Forge</span>
+            <span class="zone-tagline pixel-text">"Build It"</span>
+          </button>
+
+          <button
+            class="zone-card"
+            type="button"
+            data-zone-id="library"
+            aria-controls="zone-drawer"
+            aria-label="Open The Library Understand It prompt"
+          >
+            <span class="zone-badge" hidden aria-hidden="true">✅</span>
+            <span class="zone-index pixel-text">Zone 2</span>
+            <span class="zone-emoji" aria-hidden="true">📚</span>
+            <span class="zone-name pixel-text">The Library</span>
+            <span class="zone-tagline pixel-text">"Understand It"</span>
+          </button>
+
+          <button
+            class="zone-card"
+            type="button"
+            data-zone-id="workshop"
+            aria-controls="zone-drawer"
+            aria-label="Open The Workshop Fix It prompt"
+          >
+            <span class="zone-badge" hidden aria-hidden="true">✅</span>
+            <span class="zone-index pixel-text">Zone 3</span>
+            <span class="zone-emoji" aria-hidden="true">🔧</span>
+            <span class="zone-name pixel-text">The Workshop</span>
+            <span class="zone-tagline pixel-text">"Fix It"</span>
+          </button>
+        </section>
+      </main>
+
+      <div class="drawer-layer" id="drawer-layer" aria-hidden="true">
+        <button
+          class="drawer-scrim"
+          id="drawer-scrim"
+          type="button"
+          aria-label="Close prompt drawer"
+        ></button>
+
+        <aside
+          class="drawer"
+          id="zone-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="drawer-title"
+        >
+          <div class="drawer-handle" aria-hidden="true"></div>
+
+          <div class="drawer-header">
+            <div class="drawer-heading">
+              <p class="drawer-kicker pixel-text" id="drawer-kicker"></p>
+              <h2 class="drawer-title pixel-text" id="drawer-title"></h2>
+            </div>
+
+            <button
+              class="drawer-close pixel-text"
+              id="drawer-close"
+              type="button"
+              aria-label="Close prompt drawer"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div class="drawer-content">
+            <section class="drawer-section" aria-labelledby="summary-heading">
+              <h3 class="pixel-text" id="summary-heading">What This Does</h3>
+              <p class="drawer-summary" id="drawer-summary"></p>
+            </section>
+
+            <section class="drawer-section" aria-labelledby="instructions-heading">
+              <h3 class="pixel-text" id="instructions-heading">How To Use</h3>
+              <ol class="instructions-list" id="drawer-instructions"></ol>
+            </section>
+
+            <section
+              class="drawer-section"
+              id="drawer-preview-section"
+              aria-labelledby="preview-heading"
+              hidden
+            >
+              <h3 class="pixel-text" id="preview-heading">Prompt Preview</h3>
+              <pre class="prompt-preview" id="drawer-preview"></pre>
+            </section>
+          </div>
+
+          <div class="drawer-footer">
+            <button class="copy-button" id="copy-button" type="button">
+              📋 COPY PROMPT
+            </button>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </body>
+</html>

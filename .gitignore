@@ -1,0 +1,8 @@
+.DS_Store
+
+# Runtime app already contains the needed prompt content.
+prompt-quest-PRD.md
+generator.md
+translator.md
+evaluator.md
+surveyor.md
