@@ -2,26 +2,50 @@
 
 const ZONES = [
   {
+    id: 'blueprint',
+    emoji: '📋',
+    name: 'The Blueprint',
+    tagline: 'Plan It',
+    summary: 'Share your Canva wireframes link with your teacher. Your teacher will walk through turning your wireframes into a PRD (Product Requirements Document) — a clear plan of what your app should do. You\'ll use that PRD in the next zone.',
+    instructions: [
+      'Open your Canva wireframes',
+      'Grab the "Share" link from Canva',
+      'Send the link to your teacher',
+      'Watch as the teacher generates the PRD from your wireframes',
+      'Listen for how each screen becomes a section of the PRD',
+      'Save the PRD your teacher shares back — you\'ll paste it in Zone 1',
+    ],
+    showPreview: false,
+    copyEnabled: false,
+    doneLabel: '✅ GOT IT!',
+    promptText: '',
+  },
+  {
     id: 'forge',
     emoji: '🏰',
     name: 'The Forge',
     tagline: 'Build It',
-    summary: 'This turns Gemini into your app-building assistant. It knows you\'re new to coding and will generate a complete single-file HTML app from your idea.',
+    summary: 'This turns Gemini into your app-building assistant. It knows you\'re new to coding and will default to a wireframe walkthrough — mocking up signup and AI features so your prototype works on the first try.',
     instructions: [
-      'Copy the prompt',
-      'Open a new Gemini chat',
-      'Paste it in as your first message',
-      'Then describe your app idea!',
+      'Tap "Open Gemini Canvas" below to open gemini.google.com',
+      'In Gemini, turn ON Canvas mode (top-right toggle)',
+      'Come back here and tap COPY PROMPT — this is the AI\'s Job Description',
+      'Paste it into Gemini as your FIRST message',
+      'Then paste the PRD your teacher shared (from Zone 0)',
+      'Describe any extra details about your app idea',
     ],
+    externalLink: 'https://gemini.google.com/',
+    externalLinkLabel: '🌐 Open Gemini Canvas',
     showPreview: true,
     previewLines: 5,
-    promptText: `You are an expert at creating simple, functional single-file web apps for coding novices. Your goal is to turn rough ideas into working prototypes that can be opened directly in a web browser.
+    promptText: `VIBE CODING ASSISTANT V2 - Single File App Generator
+You are an expert at creating simple, functional single-file web apps for coding novices. Your goal is to turn rough ideas into working prototypes that can be opened directly in a web browser.
 CONSTRAINTS:
 Generate ONE complete HTML file containing CSS and JavaScript.
-For simple logic: Use Vanilla JS (no libraries).
-For complex UIs: You may use React/ReactDOM via CDN (UNPKG), but you must follow strict React best practices.
+For simple logic: Use Vanilla JS (no libraries, dependencies via CDN only as needed
 Apps must work when opened locally on desktop.
 Prioritize code that works on first try.
+For onboard / AI features, use a mock-up / wizard-of-oz approach to simulate walking through the UX even if those pieces don’t work and to bypass registration
 CODE REQUIREMENTS:
 Use semantic HTML structure.
 Include responsive CSS styling (Tailwind via CDN is permitted).
@@ -46,9 +70,6 @@ Key concepts summary: 3-5 bullet points.
 Simple modifications: 2-3 specific changes they could try.
 USER INSTRUCTION: Simply describe what kind of app you want to build. I'll help you create something functional!
 What app would you like to build today?
-
-
-
 `,
   },
   {

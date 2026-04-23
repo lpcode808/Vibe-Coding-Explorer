@@ -6,21 +6,25 @@ Live site: [https://lpcode808.github.io/Vibe-Coding-Explorer/](https://lpcode808
 
 ## What This Version Includes
 
-- A single-screen overworld map with three zones:
-  - `The Forge` for building
-  - `The Library` for understanding code
-  - `The Workshop` for debugging
+- A single-screen overworld map with four zones:
+  - `The Blueprint` — share Canva wireframes with teacher and watch them generate a PRD
+  - `The Forge` — generator prompt + Gemini Canvas link for building
+  - `The Library` — translator prompt for understanding code
+  - `The Workshop` — evaluator prompt for debugging
 - A full-height bottom sheet drawer with:
   - zone title
   - summary
   - step-by-step instructions
-  - prompt preview
-  - copy button
+  - prompt preview (on zones with a prompt)
+  - optional external link button (e.g. "Open Gemini Canvas" on Zone 1)
+  - copy / got-it button
 - Clipboard copy with fallback support
 - Progress persistence using `localStorage`
 - Touch-friendly interaction for Chromebook use
-- Keyboard-play mode with a pixel panther avatar
+- Keyboard-play mode with a pixel panther avatar starting center-bottom
+- Low-key ambient background music (procedural Web Audio, **default OFF** — toggle in the HUD)
 - Full prompt content embedded directly in `prompts.js`
+- Agent guidance in `AGENTS.md` for non-Claude coding harnesses
 
 ## Runtime Files
 

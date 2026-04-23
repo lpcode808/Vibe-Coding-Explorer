@@ -19,7 +19,20 @@
       <h1 class="visually-hidden">Prompt Quest</h1>
       <main class="map-view" id="map-view" tabindex="-1" aria-label="Prompt Quest overworld map">
         <section class="adventure-hud" aria-label="Map controls">
-          <p class="hud-title pixel-text">Panther Mode</p>
+          <div class="hud-topline">
+            <p class="hud-title pixel-text">Panther Mode</p>
+            <button
+              class="music-toggle pixel-text"
+              type="button"
+              id="music-toggle"
+              aria-pressed="false"
+              aria-label="Turn background music on"
+              title="Background music is off"
+            >
+              <span class="music-icon" aria-hidden="true">🔇</span>
+              <span class="music-label">Music</span>
+            </button>
+          </div>
 
           <div class="hud-keys" aria-hidden="true">
             <span class="keycap pixel-text">W</span>
@@ -130,6 +143,20 @@
           <button
             class="zone-card"
             type="button"
+            data-zone-id="blueprint"
+            aria-controls="zone-drawer"
+            aria-label="Open The Blueprint Plan It zone"
+          >
+            <span class="zone-badge" hidden aria-hidden="true">✅</span>
+            <span class="zone-index pixel-text">Zone 0</span>
+            <span class="zone-emoji" aria-hidden="true">📋</span>
+            <span class="zone-name pixel-text">The Blueprint</span>
+            <span class="zone-tagline pixel-text">"Plan It"</span>
+          </button>
+
+          <button
+            class="zone-card"
+            type="button"
             data-zone-id="forge"
             aria-controls="zone-drawer"
             aria-label="Open The Forge Build It prompt"
@@ -227,6 +254,16 @@
           </div>
 
           <div class="drawer-footer">
+            <a
+              class="link-button pixel-text"
+              id="external-link"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+            >
+              🌐 Open Link
+            </a>
             <button class="copy-button" id="copy-button" type="button">
               📋 COPY PROMPT
             </button>

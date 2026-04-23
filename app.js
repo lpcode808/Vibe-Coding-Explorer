@@ -1,17 +1,29 @@
 'use strict';
 
 const STORAGE_KEY = 'promptquest_visited';
+const MUSIC_STORAGE_KEY = 'promptquest_music';
 const COPY_DEFAULT_LABEL = '📋 COPY PROMPT';
 const COPY_SUCCESS_LABEL = '✅ Copied!';
 const COPY_ERROR_LABEL = '⚠ COPY AGAIN';
+const COPY_DONE_LABEL_FALLBACK = '✅ GOT IT!';
 const COPY_FEEDBACK_MS = 2000;
 const AVATAR_SPEED = 260;
 const AVATAR_SIZE_FALLBACK = 88;
 const AVATAR_TOUCH_PADDING_X = 10;
 const AVATAR_TOUCH_PADDING_Y = 4;
-const AVATAR_START_OFFSET = 24;
+const AVATAR_BOTTOM_MARGIN = 28;
 const MOVEMENT_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']);
 const ACTIVATION_CODES = new Set(['Space', 'Enter']);
+
+const MUSIC_MASTER_GAIN = 0.16;
+const MUSIC_CHORD_SECONDS = 4.0;
+const MUSIC_CHORDS = [
+  [220.00, 261.63, 329.63],
+  [174.61, 220.00, 261.63, 329.63],
+  [130.81, 164.81, 196.00, 261.63],
+  [196.00, 246.94, 293.66],
+];
+const MUSIC_MELODY = [329.63, 261.63, 329.63, 392.00, 440.00, 392.00, 329.63, 293.66];
 const getNow = () =>
   window.performance && typeof window.performance.now === 'function'
     ? window.performance.now()
@@ -41,6 +53,16 @@ const state = {
     lastFrameTime: 0,
     frameRequestId: null,
   },
+  music: {
+    ctx: null,
+    master: null,
+    filter: null,
+    delay: null,
+    isOn: false,
+    patternIndex: 0,
+    nextTime: 0,
+    scheduler: null,
+  },
 };
 
 const elements = {
@@ -57,8 +79,10 @@ const elements = {
   drawerPreviewSection: document.getElementById('drawer-preview-section'),
   drawerPreview: document.getElementById('drawer-preview'),
   copyButton: document.getElementById('copy-button'),
+  externalLink: document.getElementById('external-link'),
   pantherAvatar: document.getElementById('panther-avatar'),
   pantherStatus: document.getElementById('panther-status'),
+  musicToggle: document.getElementById('music-toggle'),
 };
 
 initialize();
@@ -71,6 +95,15 @@ function initialize() {
   elements.drawerClose.addEventListener('click', closeDrawer);
   elements.drawerScrim.addEventListener('click', closeDrawer);
   elements.copyButton.addEventListener('click', handleCopyClick);
+
+  if (elements.externalLink) {
+    elements.externalLink.addEventListener('click', handleExternalLinkClick);
+  }
+
+  if (elements.musicToggle) {
+    elements.musicToggle.addEventListener('click', handleMusicToggle);
+    renderMusicToggleState();
+  }
 
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
@@ -198,7 +231,13 @@ function populateDrawer(zone) {
   elements.drawerTitle.textContent = `${zone.emoji} ${zone.name}`;
   elements.drawerSummary.textContent = zone.summary;
   elements.copyButton.dataset.zoneId = zone.id;
-  elements.copyButton.setAttribute('aria-label', `Copy the ${zone.name} prompt`);
+
+  const copyEnabled = zone.copyEnabled !== false;
+  elements.copyButton.classList.toggle('is-inert', !copyEnabled);
+  elements.copyButton.setAttribute(
+    'aria-label',
+    copyEnabled ? `Copy the ${zone.name} prompt` : `Mark ${zone.name} as complete`
+  );
 
   elements.drawerInstructions.replaceChildren(
     ...zone.instructions.map((instruction) => {
@@ -208,12 +247,27 @@ function populateDrawer(zone) {
     })
   );
 
-  if (zone.showPreview) {
+  if (zone.showPreview && zone.promptText) {
     elements.drawerPreview.textContent = buildPreview(zone);
     elements.drawerPreviewSection.hidden = false;
   } else {
     elements.drawerPreview.textContent = '';
     elements.drawerPreviewSection.hidden = true;
+  }
+
+  if (elements.externalLink) {
+    if (zone.externalLink) {
+      elements.externalLink.href = zone.externalLink;
+      elements.externalLink.textContent = zone.externalLinkLabel || '🌐 Open Link';
+      elements.externalLink.hidden = false;
+      elements.externalLink.setAttribute(
+        'aria-label',
+        `${zone.externalLinkLabel || 'Open link'} in a new tab`
+      );
+    } else {
+      elements.externalLink.hidden = true;
+      elements.externalLink.removeAttribute('href');
+    }
   }
 }
 
@@ -231,6 +285,17 @@ async function handleCopyClick() {
     return;
   }
 
+  if (zone.copyEnabled === false) {
+    markZoneVisited(zone.id);
+    setCopyButtonState(zone.doneLabel || COPY_DONE_LABEL_FALLBACK, 'is-copied');
+    window.setTimeout(() => {
+      if (state.activeZoneId === zone.id) {
+        closeDrawer();
+      }
+    }, 600);
+    return;
+  }
+
   elements.copyButton.disabled = true;
 
   try {
@@ -244,6 +309,13 @@ async function handleCopyClick() {
     elements.copyButton.disabled = false;
     queueCopyButtonReset();
   }
+}
+
+function handleExternalLinkClick() {
+  if (!state.activeZoneId) {
+    return;
+  }
+  markZoneVisited(state.activeZoneId);
 }
 
 async function copyText(text) {
@@ -402,23 +474,21 @@ function positionAvatarAtStart(forceReset) {
     return;
   }
 
-  const forgeCard = getZoneCard('forge');
   const mapRect = elements.mapView.getBoundingClientRect();
 
-  if (!forgeCard || !mapRect.width || !mapRect.height) {
+  if (!mapRect.width || !mapRect.height) {
     return;
   }
 
   const avatarWidth = getAvatarWidth();
   const avatarHeight = getAvatarHeight();
-  const forgeRect = forgeCard.getBoundingClientRect();
   const targetX = clamp(
-    forgeRect.left - mapRect.left - avatarWidth - AVATAR_START_OFFSET,
+    (mapRect.width - avatarWidth) / 2,
     0,
     Math.max(mapRect.width - avatarWidth, 0)
   );
   const targetY = clamp(
-    forgeRect.top - mapRect.top + forgeRect.height / 2 - avatarHeight / 2,
+    mapRect.height - avatarHeight - AVATAR_BOTTOM_MARGIN,
     0,
     Math.max(mapRect.height - avatarHeight, 0)
   );
@@ -561,7 +631,12 @@ function setCopyButtonState(label, modifierClass) {
 function resetCopyButton() {
   clearTimeout(state.copyResetTimer);
   state.copyResetTimer = null;
-  setCopyButtonState(COPY_DEFAULT_LABEL);
+  const zone = zoneLookup.get(state.activeZoneId);
+  const label =
+    zone && zone.copyEnabled === false
+      ? zone.doneLabel || COPY_DONE_LABEL_FALLBACK
+      : COPY_DEFAULT_LABEL;
+  setCopyButtonState(label);
 }
 
 function queueCopyButtonReset() {
@@ -628,4 +703,182 @@ function isInteractiveTarget(target) {
 
 function clamp(value, minimum, maximum) {
   return Math.min(Math.max(value, minimum), maximum);
+}
+
+function handleMusicToggle() {
+  if (state.music.isOn) {
+    stopMusic();
+  } else {
+    startMusic();
+  }
+  renderMusicToggleState();
+  persistMusicPreference(state.music.isOn);
+  focusMapView();
+}
+
+function renderMusicToggleState() {
+  if (!elements.musicToggle) {
+    return;
+  }
+
+  const icon = elements.musicToggle.querySelector('.music-icon');
+  const label = elements.musicToggle.querySelector('.music-label');
+  const isOn = state.music.isOn;
+
+  elements.musicToggle.classList.toggle('is-on', isOn);
+  elements.musicToggle.setAttribute('aria-pressed', String(isOn));
+  elements.musicToggle.setAttribute(
+    'aria-label',
+    isOn ? 'Turn background music off' : 'Turn background music on'
+  );
+  elements.musicToggle.setAttribute(
+    'title',
+    isOn ? 'Background music is on' : 'Background music is off'
+  );
+
+  if (icon) {
+    icon.textContent = isOn ? '🎵' : '🔇';
+  }
+
+  if (label) {
+    label.textContent = isOn ? 'Music' : 'Music';
+  }
+}
+
+function persistMusicPreference(isOn) {
+  try {
+    localStorage.setItem(MUSIC_STORAGE_KEY, isOn ? '1' : '0');
+  } catch (error) {
+    console.warn('Music preference could not be saved.', error);
+  }
+}
+
+function initMusicContext() {
+  if (state.music.ctx) {
+    return true;
+  }
+
+  const AudioCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtor) {
+    console.warn('Web Audio API unavailable — music disabled.');
+    return false;
+  }
+
+  const ctx = new AudioCtor();
+  const master = ctx.createGain();
+  master.gain.value = 0;
+
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 1400;
+  filter.Q.value = 0.6;
+
+  const delay = ctx.createDelay(0.8);
+  delay.delayTime.value = 0.38;
+  const delayFeedback = ctx.createGain();
+  delayFeedback.gain.value = 0.22;
+  const delayMix = ctx.createGain();
+  delayMix.gain.value = 0.3;
+
+  filter.connect(master);
+  filter.connect(delay);
+  delay.connect(delayFeedback);
+  delayFeedback.connect(delay);
+  delay.connect(delayMix);
+  delayMix.connect(master);
+  master.connect(ctx.destination);
+
+  state.music.ctx = ctx;
+  state.music.master = master;
+  state.music.filter = filter;
+  state.music.delay = delay;
+
+  return true;
+}
+
+function scheduleMusicNote(freq, startOffset, duration, oscType, gainLevel) {
+  const ctx = state.music.ctx;
+  if (!ctx) {
+    return;
+  }
+
+  const when = state.music.nextTime + startOffset;
+  const osc = ctx.createOscillator();
+  osc.type = oscType;
+  osc.frequency.value = freq;
+
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(0.0001, when);
+  env.gain.linearRampToValueAtTime(gainLevel, when + 0.25);
+  env.gain.linearRampToValueAtTime(gainLevel * 0.65, when + duration * 0.45);
+  env.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+
+  osc.connect(env);
+  env.connect(state.music.filter);
+  osc.start(when);
+  osc.stop(when + duration + 0.1);
+}
+
+function scheduleMusicBar() {
+  if (!state.music.isOn || !state.music.ctx) {
+    return;
+  }
+
+  const chord = MUSIC_CHORDS[state.music.patternIndex % MUSIC_CHORDS.length];
+
+  chord.forEach((freq) => {
+    scheduleMusicNote(freq, 0, MUSIC_CHORD_SECONDS, 'sine', 0.07);
+  });
+
+  const melodyIndex = state.music.patternIndex % MUSIC_MELODY.length;
+  scheduleMusicNote(MUSIC_MELODY[melodyIndex], 0.6, 1.2, 'triangle', 0.045);
+  scheduleMusicNote(MUSIC_MELODY[(melodyIndex + 3) % MUSIC_MELODY.length], 2.5, 1.0, 'triangle', 0.032);
+
+  state.music.nextTime += MUSIC_CHORD_SECONDS;
+  state.music.patternIndex += 1;
+  state.music.scheduler = window.setTimeout(scheduleMusicBar, (MUSIC_CHORD_SECONDS - 0.5) * 1000);
+}
+
+function startMusic() {
+  if (!initMusicContext()) {
+    return;
+  }
+  if (state.music.isOn) {
+    return;
+  }
+
+  const ctx = state.music.ctx;
+  if (ctx.state === 'suspended' && typeof ctx.resume === 'function') {
+    ctx.resume();
+  }
+
+  state.music.isOn = true;
+  state.music.patternIndex = 0;
+  state.music.nextTime = ctx.currentTime + 0.15;
+
+  const now = ctx.currentTime;
+  state.music.master.gain.cancelScheduledValues(now);
+  state.music.master.gain.setValueAtTime(state.music.master.gain.value, now);
+  state.music.master.gain.linearRampToValueAtTime(MUSIC_MASTER_GAIN, now + 1.0);
+
+  scheduleMusicBar();
+}
+
+function stopMusic() {
+  state.music.isOn = false;
+
+  if (state.music.scheduler) {
+    clearTimeout(state.music.scheduler);
+    state.music.scheduler = null;
+  }
+
+  const ctx = state.music.ctx;
+  if (!ctx || !state.music.master) {
+    return;
+  }
+
+  const now = ctx.currentTime;
+  state.music.master.gain.cancelScheduledValues(now);
+  state.music.master.gain.setValueAtTime(state.music.master.gain.value, now);
+  state.music.master.gain.linearRampToValueAtTime(0, now + 0.6);
 }
