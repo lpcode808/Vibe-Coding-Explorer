@@ -10,6 +10,7 @@ See `prompt-quest-PRD.md` for the full product spec.
 
 ## Runtime Files (don't rename without updating `index.html`)
 
+- `favicon.svg` — pixel favicon for browser tabs/bookmarks
 - `index.html` — semantic shell, zone cards, drawer markup, HUD
 - `style.css` — overworld visuals, drawer animation, pixel-panther, music button
 - `app.js` — tap/keyboard logic, drawer open/close, clipboard, localStorage, panther movement, ambient music
@@ -42,7 +43,8 @@ These markdown files are the canonical source for the prompt content. Their text
   promptText: `full prompt — template literal, escape backticks with \\\``,
   externalLink?: 'https://...',    // optional; renders "Open X" button
   externalLinkLabel?: 'Open Gemini Canvas',
-  copyEnabled: true | false        // false → button acts as "Got It!" (no clipboard)
+  copyEnabled: true | false,       // false → button acts as "Got It!" (no clipboard)
+  doneLabel?: '✅ GOT IT!'
 }
 ```
 
@@ -63,7 +65,7 @@ Zone IDs are stable — `app.js` and CSS reference them, and `localStorage` pers
 - Zones stack vertically in a single column, connected by a dashed path.
 - Map fits 1366×768 without horizontal scroll.
 - Drawer is a full-height bottom sheet that slides up.
-- Panther avatar starts **center-bottom of the map** and moves with WASD / arrow keys; SPACE activates the nearest touching zone.
+- Panther avatar starts **top-center of the map** and moves with WASD / arrow keys; SPACE activates the nearest touching zone.
 
 ## When Adding a New Zone
 
@@ -88,10 +90,14 @@ Before declaring changes done:
 - [ ] Copy button writes the right `promptText` to clipboard.
 - [ ] `✅` badge appears after copy and survives page reload.
 - [ ] WASD moves the panther; SPACE on a touching zone opens the drawer.
+- [ ] Zone 0 handoff labels the first moving token `WIREFRAME`, then labels the post-Gemini token `PRD`.
+- [ ] Zone 1 copy completion emits a `FIRST PROTOTYPE` token toward Zone 2.
+- [ ] Drawer keyboard shortcuts work: `1` triggers the top action when present, `2` or Enter triggers the main action.
+- [ ] Panther Mode help auto-hides after ~3 seconds; `?` and the bottom-center `?` button show it again.
 - [ ] Music toggle defaults to OFF on fresh load; toggling on produces audible sound; toggling off silences it.
 - [ ] No horizontal scroll at 1366×768.
 - [ ] Drawer closes on ✕, scrim tap, and Escape key.
 
 ## Deployment
 
-GitHub Pages at `lpcode808.github.io/Vibe-Coding-Explorer/`. All paths relative, no server-side anything. The only files needed at runtime are `index.html`, `style.css`, `app.js`, `prompts.js` (plus any fonts via CDN).
+GitHub Pages at `lpcode808.github.io/Vibe-Coding-Explorer/`. All paths relative, no server-side anything. The runtime files are `favicon.svg`, `index.html`, `style.css`, `app.js`, and `prompts.js` (plus any fonts via CDN).

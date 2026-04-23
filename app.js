@@ -7,11 +7,22 @@ const COPY_SUCCESS_LABEL = '✅ Copied!';
 const COPY_ERROR_LABEL = '⚠ COPY AGAIN';
 const COPY_DONE_LABEL_FALLBACK = '✅ GOT IT!';
 const COPY_FEEDBACK_MS = 2000;
+const HELP_AUTO_HIDE_MS = 3000;
+const BLUEPRINT_HANDOFF_CONFIRM_MS = 140;
+const DRAWER_CLOSE_MS = 260;
+const BLUEPRINT_HANDOFF_TO_MACHINE_MS = 2600;
+const BLUEPRINT_HANDOFF_MACHINE_PAUSE_MS = 720;
+const BLUEPRINT_HANDOFF_TO_FORGE_MS = 3400;
+const BLUEPRINT_HANDOFF_WRAPUP_MS = 280;
+const BLUEPRINT_GUIDE_MS = 1800;
+const PROTOTYPE_HANDOFF_MS = 2600;
+const PROTOTYPE_HANDOFF_WRAPUP_MS = 280;
 const AVATAR_SPEED = 260;
 const AVATAR_SIZE_FALLBACK = 88;
+const HANDOFF_AVATAR_SIZE_FALLBACK = 58;
 const AVATAR_TOUCH_PADDING_X = 10;
 const AVATAR_TOUCH_PADDING_Y = 4;
-const AVATAR_BOTTOM_MARGIN = 28;
+const AVATAR_TOP_MARGIN = 28;
 const MOVEMENT_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']);
 const ACTIVATION_CODES = new Set(['Space', 'Enter']);
 
@@ -63,11 +74,22 @@ const state = {
     nextTime: 0,
     scheduler: null,
   },
+  handoff: {
+    isAnimating: false,
+    frameRequestId: null,
+    guideTimer: null,
+  },
+  help: {
+    isVisible: true,
+    hideTimer: null,
+  },
 };
 
 const elements = {
   body: document.body,
   mapView: document.getElementById('map-view'),
+  adventureHud: document.getElementById('adventure-hud'),
+  helpToggle: document.getElementById('help-toggle'),
   zoneCards: Array.from(document.querySelectorAll('.zone-card')),
   drawerLayer: document.getElementById('drawer-layer'),
   drawerScrim: document.getElementById('drawer-scrim'),
@@ -80,6 +102,13 @@ const elements = {
   drawerPreview: document.getElementById('drawer-preview'),
   copyButton: document.getElementById('copy-button'),
   externalLink: document.getElementById('external-link'),
+  handoffPathLayer: document.getElementById('handoff-path-layer'),
+  handoffPathToMachine: document.getElementById('handoff-path-to-machine'),
+  handoffPathToForge: document.getElementById('handoff-path-to-forge'),
+  geminiMachine: document.getElementById('gemini-machine'),
+  geminiMachineSprite: document.querySelector('.gemini-machine-sprite'),
+  wireframeHandoff: document.getElementById('wireframe-handoff'),
+  handoffLabel: document.getElementById('handoff-label'),
   pantherAvatar: document.getElementById('panther-avatar'),
   pantherStatus: document.getElementById('panther-status'),
   musicToggle: document.getElementById('music-toggle'),
@@ -105,6 +134,12 @@ function initialize() {
     renderMusicToggleState();
   }
 
+  if (elements.helpToggle) {
+    elements.helpToggle.addEventListener('click', handleHelpToggleClick);
+    renderHelpState();
+    scheduleHelpAutoHide();
+  }
+
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
   window.addEventListener('blur', handleWindowBlur);
@@ -119,6 +154,23 @@ function initialize() {
 }
 
 function handleKeyDown(event) {
+  if (isHelpShortcut(event) && !isInteractiveTarget(event.target)) {
+    event.preventDefault();
+    toggleHelp();
+    return;
+  }
+
+  if (state.handoff.isAnimating) {
+    if (event.key === 'Escape' || MOVEMENT_CODES.has(event.code) || ACTIVATION_CODES.has(event.code)) {
+      event.preventDefault();
+    }
+    return;
+  }
+
+  if (state.activeZoneId && handleDrawerShortcutKeyDown(event)) {
+    return;
+  }
+
   if (event.key === 'Escape' && state.activeZoneId) {
     event.preventDefault();
     closeDrawer();
@@ -188,10 +240,19 @@ function handleResize() {
   state.avatar.mapHeight = mapRect.height;
   clampAvatarPosition();
   renderAvatar();
+
+  if (state.handoff.isAnimating) {
+    renderHandoffPaths(getBlueprintHandoffPoints());
+  }
+
   updateTouchingZone();
 }
 
 function openZone(zoneId) {
+  if (state.handoff.isAnimating) {
+    return;
+  }
+
   const zone = zoneLookup.get(zoneId);
 
   if (!zone) {
@@ -236,7 +297,9 @@ function populateDrawer(zone) {
   elements.copyButton.classList.toggle('is-inert', !copyEnabled);
   elements.copyButton.setAttribute(
     'aria-label',
-    copyEnabled ? `Copy the ${zone.name} prompt` : `Mark ${zone.name} as complete`
+    copyEnabled
+      ? `Copy the ${zone.name} prompt. Press 2 or Enter to activate.`
+      : `Mark ${zone.name} as complete. Press 2 or Enter to activate.`
   );
 
   elements.drawerInstructions.replaceChildren(
@@ -262,7 +325,7 @@ function populateDrawer(zone) {
       elements.externalLink.hidden = false;
       elements.externalLink.setAttribute(
         'aria-label',
-        `${zone.externalLinkLabel || 'Open link'} in a new tab`
+        `${zone.externalLinkLabel || 'Open link'} in a new tab. Press 1 to activate.`
       );
     } else {
       elements.externalLink.hidden = true;
@@ -286,6 +349,11 @@ async function handleCopyClick() {
   }
 
   if (zone.copyEnabled === false) {
+    if (zone.id === 'blueprint') {
+      await runBlueprintHandoff(zone);
+      return;
+    }
+
     markZoneVisited(zone.id);
     setCopyButtonState(zone.doneLabel || COPY_DONE_LABEL_FALLBACK, 'is-copied');
     window.setTimeout(() => {
@@ -302,6 +370,11 @@ async function handleCopyClick() {
     await copyText(zone.promptText);
     setCopyButtonState(COPY_SUCCESS_LABEL, 'is-copied');
     markZoneVisited(zone.id);
+
+    if (zone.id === 'forge') {
+      await runForgePrototypeHandoff(zone);
+      return;
+    }
   } catch (error) {
     console.error('Prompt copy failed.', error);
     setCopyButtonState(COPY_ERROR_LABEL, 'is-error');
@@ -311,11 +384,174 @@ async function handleCopyClick() {
   }
 }
 
+async function runForgePrototypeHandoff(zone) {
+  if (state.handoff.isAnimating) {
+    return;
+  }
+
+  state.handoff.isAnimating = true;
+  clearMovementKeys();
+  setCopyButtonState('FIRST PROTOTYPE!', 'is-copied');
+  updatePantherStatus('The Forge is making your first prototype...');
+
+  try {
+    await delay(getMotionDuration(BLUEPRINT_HANDOFF_CONFIRM_MS, 80));
+
+    if (state.activeZoneId === zone.id) {
+      closeDrawer();
+    }
+
+    await delay(getMotionDuration(DRAWER_CLOSE_MS, 80));
+    await playForgePrototypeAnimation();
+    updatePantherStatus('First prototype ready. Next stop: The Library.');
+    await delay(getMotionDuration(PROTOTYPE_HANDOFF_WRAPUP_MS, 120));
+  } finally {
+    hideHandoffPaths();
+    hideWireframeHandoff();
+    state.handoff.isAnimating = false;
+    focusMapView();
+  }
+}
+
+async function runBlueprintHandoff(zone) {
+  if (state.handoff.isAnimating) {
+    return;
+  }
+
+  state.handoff.isAnimating = true;
+  clearMovementKeys();
+  markZoneVisited(zone.id);
+  setCopyButtonState(zone.doneLabel || COPY_DONE_LABEL_FALLBACK, 'is-copied');
+  elements.copyButton.disabled = true;
+  updatePantherStatus('Wireframe ready. Sending it to Gemini...');
+
+  try {
+    await delay(getMotionDuration(BLUEPRINT_HANDOFF_CONFIRM_MS, 80));
+
+    if (state.activeZoneId === zone.id) {
+      closeDrawer();
+    }
+
+    await delay(getMotionDuration(DRAWER_CLOSE_MS, 80));
+    await playBlueprintHandoffAnimation();
+    updatePantherStatus('PRD delivered. Next stop: The Forge.');
+    await delay(getMotionDuration(BLUEPRINT_HANDOFF_WRAPUP_MS, 120));
+  } finally {
+    setGeminiMachineProcessing(false);
+    hideHandoffPaths();
+    hideWireframeHandoff();
+    state.handoff.isAnimating = false;
+    elements.copyButton.disabled = false;
+    resetCopyButton();
+    focusMapView();
+  }
+}
+
 function handleExternalLinkClick() {
   if (!state.activeZoneId) {
     return;
   }
   markZoneVisited(state.activeZoneId);
+}
+
+function handleHelpToggleClick() {
+  toggleHelp();
+  focusMapView();
+}
+
+function toggleHelp() {
+  if (state.help.isVisible) {
+    hideHelp();
+  } else {
+    showHelp();
+  }
+}
+
+function showHelp() {
+  clearHelpAutoHide();
+  state.help.isVisible = true;
+  renderHelpState();
+  scheduleHelpAutoHide();
+}
+
+function hideHelp() {
+  clearHelpAutoHide();
+  state.help.isVisible = false;
+  renderHelpState();
+}
+
+function scheduleHelpAutoHide() {
+  clearHelpAutoHide();
+
+  if (!state.help.isVisible) {
+    return;
+  }
+
+  state.help.hideTimer = window.setTimeout(hideHelp, HELP_AUTO_HIDE_MS);
+}
+
+function clearHelpAutoHide() {
+  if (!state.help.hideTimer) {
+    return;
+  }
+
+  window.clearTimeout(state.help.hideTimer);
+  state.help.hideTimer = null;
+}
+
+function renderHelpState() {
+  if (elements.adventureHud) {
+    elements.adventureHud.classList.toggle('is-hidden', !state.help.isVisible);
+    elements.adventureHud.setAttribute('aria-hidden', String(!state.help.isVisible));
+  }
+
+  if (elements.helpToggle) {
+    elements.helpToggle.classList.toggle('is-active', state.help.isVisible);
+    elements.helpToggle.setAttribute('aria-expanded', String(state.help.isVisible));
+    elements.helpToggle.setAttribute(
+      'aria-label',
+      state.help.isVisible ? 'Hide map controls' : 'Show map controls'
+    );
+  }
+}
+
+function handleDrawerShortcutKeyDown(event) {
+  if (!state.activeZoneId) {
+    return false;
+  }
+
+  const canUseTopChoice = Boolean(
+    elements.externalLink &&
+    !elements.externalLink.hidden &&
+    elements.externalLink.getAttribute('href')
+  );
+
+  if (event.code === 'Digit1' || event.code === 'Numpad1') {
+    if (!canUseTopChoice) {
+      return false;
+    }
+
+    event.preventDefault();
+    elements.externalLink.click();
+    return true;
+  }
+
+  const isMainChoice =
+    event.code === 'Digit2' ||
+    event.code === 'Numpad2' ||
+    (event.key === 'Enter' && !isInteractiveTarget(event.target));
+
+  if (!isMainChoice) {
+    return false;
+  }
+
+  event.preventDefault();
+
+  if (!elements.copyButton.disabled) {
+    elements.copyButton.click();
+  }
+
+  return true;
 }
 
 async function copyText(text) {
@@ -407,6 +643,12 @@ function updateAvatar(deltaSeconds) {
     return;
   }
 
+  if (state.handoff.isAnimating) {
+    state.avatar.isWalking = false;
+    renderAvatar();
+    return;
+  }
+
   if (!state.avatar.hasPlaced) {
     positionAvatarAtStart(true);
   }
@@ -481,16 +723,15 @@ function positionAvatarAtStart(forceReset) {
   }
 
   const avatarWidth = getAvatarWidth();
-  const avatarHeight = getAvatarHeight();
   const targetX = clamp(
     (mapRect.width - avatarWidth) / 2,
     0,
     Math.max(mapRect.width - avatarWidth, 0)
   );
   const targetY = clamp(
-    mapRect.height - avatarHeight - AVATAR_BOTTOM_MARGIN,
+    AVATAR_TOP_MARGIN,
     0,
-    Math.max(mapRect.height - avatarHeight, 0)
+    Math.max(mapRect.height - getAvatarHeight(), 0)
   );
 
   if (forceReset || !state.avatar.hasPlaced) {
@@ -527,6 +768,12 @@ function renderAvatar() {
 }
 
 function updateTouchingZone() {
+  if (state.handoff.isAnimating) {
+    state.avatar.touchingZoneId = null;
+    elements.zoneCards.forEach((card) => card.classList.remove('is-nearby'));
+    return;
+  }
+
   const touchingZoneId = state.activeZoneId ? null : getTouchingZoneId();
 
   state.avatar.touchingZoneId = touchingZoneId;
@@ -604,6 +851,402 @@ function clearMovementKeys() {
   state.avatar.keys.clear();
   state.avatar.isWalking = false;
   renderAvatar();
+}
+
+function playForgePrototypeAnimation() {
+  const points = getZoneToZoneHandoffPoints('forge', 'library');
+
+  if (!points) {
+    flashGuidedZone('library');
+    pulseZone('library');
+    return Promise.resolve();
+  }
+
+  const duration = getMotionDuration(PROTOTYPE_HANDOFF_MS, 320);
+
+  renderSingleHandoffPath(points);
+  setHandoffMode('prototype');
+  setHandoffLabel('FIRST PROTOTYPE');
+  showWireframeHandoff(points.start);
+
+  return new Promise((resolve) => {
+    const startedAt = getNow();
+
+    const step = (timestamp) => {
+      const dynamicPoints = getZoneToZoneHandoffPoints('forge', 'library') || points;
+      const progress = easeInOut(clamp((timestamp - startedAt) / duration, 0, 1));
+      const point = getQuadraticPoint(dynamicPoints.start, dynamicPoints.control, dynamicPoints.end, progress);
+
+      showWireframeHandoff(point);
+
+      if (progress < 1) {
+        state.handoff.frameRequestId = requestFrame(step);
+        return;
+      }
+
+      hideHandoffPaths();
+      hideWireframeHandoff();
+      flashGuidedZone('library');
+      pulseZone('library');
+      state.handoff.frameRequestId = null;
+      resolve();
+    };
+
+    state.handoff.frameRequestId = requestFrame(step);
+  });
+}
+
+function playBlueprintHandoffAnimation() {
+  const points = getBlueprintHandoffPoints();
+
+  if (!points) {
+    flashGuidedZone('forge');
+    pulseZone('forge');
+    return Promise.resolve();
+  }
+
+  const toMachineDuration = getMotionDuration(BLUEPRINT_HANDOFF_TO_MACHINE_MS, 240);
+  const machinePauseDuration = getMotionDuration(BLUEPRINT_HANDOFF_MACHINE_PAUSE_MS, 140);
+  const toForgeDuration = getMotionDuration(BLUEPRINT_HANDOFF_TO_FORGE_MS, 320);
+
+  renderHandoffPaths(points);
+  showHandoffPathPhase('toMachine');
+  setHandoffMode('wireframe');
+  setHandoffLabel('WIREFRAME');
+  setGeminiMachineProcessing(false);
+  showWireframeHandoff(points.start);
+
+  return new Promise((resolve) => {
+    let phase = 'toMachine';
+    let phaseStartedAt = getNow();
+    let hasTransformed = false;
+
+    const step = (timestamp) => {
+      const dynamicPoints = getBlueprintHandoffPoints() || points;
+
+      if (phase === 'toMachine') {
+        const progress = easeInOut(clamp((timestamp - phaseStartedAt) / toMachineDuration, 0, 1));
+        const point = getQuadraticPoint(dynamicPoints.start, dynamicPoints.toMachineControl, dynamicPoints.machineInput, progress);
+
+        showWireframeHandoff(point);
+
+        if (progress < 1) {
+          state.handoff.frameRequestId = requestFrame(step);
+          return;
+        }
+
+        phase = 'machinePause';
+        phaseStartedAt = timestamp;
+        setGeminiMachineProcessing(true);
+        updatePantherStatus('Gemini is reading the wireframe...');
+        showWireframeHandoff(dynamicPoints.machineInput);
+        state.handoff.frameRequestId = requestFrame(step);
+        return;
+      }
+
+      if (phase === 'machinePause') {
+        showWireframeHandoff(dynamicPoints.machineInput);
+
+        if (!hasTransformed && timestamp - phaseStartedAt >= machinePauseDuration * 0.45) {
+          hasTransformed = true;
+          setHandoffMode('prd');
+          setHandoffLabel('PRD');
+          showHandoffPathPhase('toForge');
+          updatePantherStatus('Gemini changed the wireframe into a PRD. Follow it to Zone 1.');
+        }
+
+        if (timestamp - phaseStartedAt < machinePauseDuration) {
+          state.handoff.frameRequestId = requestFrame(step);
+          return;
+        }
+
+        phase = 'toForge';
+        phaseStartedAt = timestamp;
+        updatePantherStatus('The PRD is heading to The Forge...');
+        state.handoff.frameRequestId = requestFrame(step);
+        return;
+      }
+
+      const progress = easeInOut(clamp((timestamp - phaseStartedAt) / toForgeDuration, 0, 1));
+      const point = getQuadraticPoint(dynamicPoints.machineOutput, dynamicPoints.toForgeControl, dynamicPoints.forgeEntry, progress);
+
+      showWireframeHandoff(point);
+
+      if (progress < 1) {
+        state.handoff.frameRequestId = requestFrame(step);
+        return;
+      }
+
+      setGeminiMachineProcessing(false);
+      hideHandoffPaths();
+      hideWireframeHandoff();
+      flashGuidedZone('forge');
+      pulseZone('forge');
+      state.handoff.frameRequestId = null;
+      resolve();
+    };
+
+    state.handoff.frameRequestId = requestFrame(step);
+  });
+}
+
+function getBlueprintHandoffPoints() {
+  if (!elements.mapView || !elements.geminiMachineSprite) {
+    return null;
+  }
+
+  const blueprintCard = getZoneCard('blueprint');
+  const forgeCard = getZoneCard('forge');
+
+  if (!blueprintCard || !forgeCard) {
+    return null;
+  }
+
+  const mapRect = elements.mapView.getBoundingClientRect();
+
+  if (!mapRect.width || !mapRect.height) {
+    return null;
+  }
+
+  const blueprintRect = blueprintCard.getBoundingClientRect();
+  const forgeRect = forgeCard.getBoundingClientRect();
+  const machineRect = elements.geminiMachineSprite.getBoundingClientRect();
+  const curveHeight = Math.max(44, mapRect.height * 0.08);
+
+  const start = getPointWithinRect(blueprintRect, mapRect, 0.76, 0.5);
+  const machineInput = getPointWithinRect(machineRect, mapRect, 0.42, 0.42);
+  const machineOutput = getPointWithinRect(machineRect, mapRect, 0.54, 0.5);
+  const forgeEntry = getPointWithinRect(forgeRect, mapRect, 0.76, 0.45);
+  const toMachineControl = {
+    x: start.x + (machineInput.x - start.x) * 0.5,
+    y: Math.min(start.y, machineInput.y) - curveHeight,
+  };
+  const toForgeControl = {
+    x: clamp(machineOutput.x + Math.max(78, mapRect.width * 0.12), 0, mapRect.width - 38),
+    y: ((machineOutput.y + forgeEntry.y) / 2) - curveHeight * 0.34,
+  };
+
+  return {
+    start,
+    machineInput,
+    machineOutput,
+    forgeEntry,
+    toMachineControl,
+    toForgeControl,
+  };
+}
+
+function getZoneToZoneHandoffPoints(startZoneId, endZoneId) {
+  if (!elements.mapView) {
+    return null;
+  }
+
+  const startCard = getZoneCard(startZoneId);
+  const endCard = getZoneCard(endZoneId);
+
+  if (!startCard || !endCard) {
+    return null;
+  }
+
+  const mapRect = elements.mapView.getBoundingClientRect();
+
+  if (!mapRect.width || !mapRect.height) {
+    return null;
+  }
+
+  const startRect = startCard.getBoundingClientRect();
+  const endRect = endCard.getBoundingClientRect();
+  const start = getPointWithinRect(startRect, mapRect, 0.76, 0.5);
+  const end = getPointWithinRect(endRect, mapRect, 0.76, 0.45);
+  const curveWidth = Math.max(72, mapRect.width * 0.1);
+  const control = {
+    x: clamp(Math.max(start.x, end.x) + curveWidth, 0, mapRect.width - 38),
+    y: (start.y + end.y) / 2,
+  };
+
+  return { start, control, end };
+}
+
+function renderHandoffPaths(points) {
+  if (
+    !points ||
+    !elements.mapView ||
+    !elements.handoffPathLayer ||
+    !elements.handoffPathToMachine ||
+    !elements.handoffPathToForge
+  ) {
+    return;
+  }
+
+  const mapRect = elements.mapView.getBoundingClientRect();
+
+  elements.handoffPathLayer.hidden = false;
+  elements.handoffPathLayer.setAttribute(
+    'viewBox',
+    `0 0 ${Math.max(mapRect.width, 1)} ${Math.max(mapRect.height, 1)}`
+  );
+  elements.handoffPathToMachine.setAttribute(
+    'd',
+    buildQuadraticPath(points.start, points.toMachineControl, points.machineInput)
+  );
+  elements.handoffPathToForge.setAttribute(
+    'd',
+    buildQuadraticPath(points.machineOutput, points.toForgeControl, points.forgeEntry)
+  );
+}
+
+function renderSingleHandoffPath(points) {
+  if (
+    !points ||
+    !elements.mapView ||
+    !elements.handoffPathLayer ||
+    !elements.handoffPathToMachine ||
+    !elements.handoffPathToForge
+  ) {
+    return;
+  }
+
+  const mapRect = elements.mapView.getBoundingClientRect();
+
+  elements.handoffPathLayer.hidden = false;
+  elements.handoffPathLayer.setAttribute(
+    'viewBox',
+    `0 0 ${Math.max(mapRect.width, 1)} ${Math.max(mapRect.height, 1)}`
+  );
+  elements.handoffPathToMachine.classList.remove('is-visible', 'is-complete');
+  elements.handoffPathToForge.setAttribute('d', buildQuadraticPath(points.start, points.control, points.end));
+  elements.handoffPathToForge.classList.add('is-visible');
+  elements.handoffPathToForge.classList.remove('is-complete');
+}
+
+function showHandoffPathPhase(phase) {
+  if (!elements.handoffPathLayer || !elements.handoffPathToMachine || !elements.handoffPathToForge) {
+    return;
+  }
+
+  elements.handoffPathLayer.hidden = false;
+
+  if (phase === 'toMachine') {
+    elements.handoffPathToMachine.classList.add('is-visible');
+    elements.handoffPathToMachine.classList.remove('is-complete');
+    elements.handoffPathToForge.classList.remove('is-visible', 'is-complete');
+    return;
+  }
+
+  if (phase === 'toForge') {
+    elements.handoffPathToMachine.classList.add('is-complete');
+    elements.handoffPathToMachine.classList.remove('is-visible');
+    elements.handoffPathToForge.classList.add('is-visible');
+    elements.handoffPathToForge.classList.remove('is-complete');
+  }
+}
+
+function hideHandoffPaths() {
+  if (!elements.handoffPathLayer || !elements.handoffPathToMachine || !elements.handoffPathToForge) {
+    return;
+  }
+
+  elements.handoffPathToMachine.classList.remove('is-visible', 'is-complete');
+  elements.handoffPathToForge.classList.remove('is-visible', 'is-complete');
+  elements.handoffPathLayer.hidden = true;
+}
+
+function getPointWithinRect(rect, mapRect, xRatio, yRatio) {
+  return {
+    x: rect.left - mapRect.left + rect.width * xRatio,
+    y: rect.top - mapRect.top + rect.height * yRatio,
+  };
+}
+
+function buildQuadraticPath(start, control, end) {
+  return `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`;
+}
+
+function getQuadraticPoint(start, control, end, progress) {
+  const inverse = 1 - progress;
+
+  return {
+    x: (inverse * inverse * start.x) + (2 * inverse * progress * control.x) + (progress * progress * end.x),
+    y: (inverse * inverse * start.y) + (2 * inverse * progress * control.y) + (progress * progress * end.y),
+  };
+}
+
+function showWireframeHandoff(point) {
+  if (!elements.wireframeHandoff || !point) {
+    return;
+  }
+
+  elements.wireframeHandoff.hidden = false;
+
+  const size = elements.wireframeHandoff.offsetWidth || HANDOFF_AVATAR_SIZE_FALLBACK;
+  const x = point.x - (size / 2);
+  const y = point.y - (size / 2);
+
+  elements.wireframeHandoff.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+}
+
+function hideWireframeHandoff() {
+  if (!elements.wireframeHandoff) {
+    return;
+  }
+
+  elements.wireframeHandoff.hidden = true;
+  setHandoffMode('wireframe');
+  setHandoffLabel('WIREFRAME');
+  elements.wireframeHandoff.style.transform = 'translate3d(-120px, -120px, 0)';
+}
+
+function setHandoffTransformed(isTransformed) {
+  setHandoffMode(isTransformed ? 'prd' : 'wireframe');
+}
+
+function setHandoffMode(mode) {
+  if (!elements.wireframeHandoff) {
+    return;
+  }
+
+  elements.wireframeHandoff.classList.remove('is-transformed', 'is-prototype');
+
+  if (mode === 'prd') {
+    elements.wireframeHandoff.classList.add('is-transformed');
+  }
+
+  if (mode === 'prototype') {
+    elements.wireframeHandoff.classList.add('is-prototype');
+  }
+}
+
+function setHandoffLabel(label) {
+  if (!elements.handoffLabel) {
+    return;
+  }
+
+  elements.handoffLabel.textContent = label;
+}
+
+function setGeminiMachineProcessing(isProcessing) {
+  if (!elements.geminiMachine) {
+    return;
+  }
+
+  elements.geminiMachine.classList.toggle('is-processing', isProcessing);
+}
+
+function flashGuidedZone(zoneId) {
+  clearTimeout(state.handoff.guideTimer);
+
+  elements.zoneCards.forEach((card) => card.classList.remove('is-guided'));
+
+  const card = getZoneCard(zoneId);
+
+  if (!card) {
+    return;
+  }
+
+  card.classList.add('is-guided');
+  state.handoff.guideTimer = window.setTimeout(() => {
+    card.classList.remove('is-guided');
+  }, BLUEPRINT_GUIDE_MS);
 }
 
 function handleWindowBlur() {
@@ -701,8 +1344,36 @@ function isInteractiveTarget(target) {
   return Boolean(target && typeof target.closest === 'function' && target.closest('button, [href], input, select, textarea, summary, [role="button"]'));
 }
 
+function isHelpShortcut(event) {
+  return event.key === '?' || (event.code === 'Slash' && event.shiftKey);
+}
+
 function clamp(value, minimum, maximum) {
   return Math.min(Math.max(value, minimum), maximum);
+}
+
+function easeInOut(value) {
+  return value < 0.5
+    ? 4 * value * value * value
+    : 1 - Math.pow(-2 * value + 2, 3) / 2;
+}
+
+function prefersReducedMotion() {
+  return Boolean(
+    window.matchMedia &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+function getMotionDuration(standardDuration, reducedDuration) {
+  return prefersReducedMotion() ? reducedDuration : standardDuration;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function handleMusicToggle() {
