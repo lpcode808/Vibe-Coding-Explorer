@@ -15,8 +15,9 @@ const BLUEPRINT_HANDOFF_MACHINE_PAUSE_MS = 720;
 const BLUEPRINT_HANDOFF_TO_FORGE_MS = 3400;
 const BLUEPRINT_HANDOFF_WRAPUP_MS = 280;
 const BLUEPRINT_GUIDE_MS = 1800;
-const PROTOTYPE_HANDOFF_MS = 2600;
-const PROTOTYPE_HANDOFF_WRAPUP_MS = 280;
+const FORGE_HANDOFF_TO_MACHINE_MS = 2600;
+const FORGE_HANDOFF_MACHINE_PAUSE_MS = 720;
+const FORGE_HANDOFF_TO_LIBRARY_MS = 3400;
 const AVATAR_SPEED = 260;
 const AVATAR_SIZE_FALLBACK = 88;
 const HANDOFF_AVATAR_SIZE_FALLBACK = 58;
@@ -392,7 +393,7 @@ async function runForgePrototypeHandoff(zone) {
   state.handoff.isAnimating = true;
   clearMovementKeys();
   setCopyButtonState('FIRST PROTOTYPE!', 'is-copied');
-  updatePantherStatus('The Forge is making your first prototype...');
+  updatePantherStatus('Your prototype is heading to Gemini...');
 
   try {
     await delay(getMotionDuration(BLUEPRINT_HANDOFF_CONFIRM_MS, 80));
@@ -402,10 +403,11 @@ async function runForgePrototypeHandoff(zone) {
     }
 
     await delay(getMotionDuration(DRAWER_CLOSE_MS, 80));
-    await playForgePrototypeAnimation();
-    updatePantherStatus('First prototype ready. Next stop: The Library.');
-    await delay(getMotionDuration(PROTOTYPE_HANDOFF_WRAPUP_MS, 120));
+    await playForgeLibraryHandoffAnimation();
+    updatePantherStatus('Code guide ready. Next stop: The Library.');
+    await delay(getMotionDuration(BLUEPRINT_HANDOFF_WRAPUP_MS, 120));
   } finally {
+    setGeminiMachineProcessing(false);
     hideHandoffPaths();
     hideWireframeHandoff();
     state.handoff.isAnimating = false;
@@ -853,8 +855,8 @@ function clearMovementKeys() {
   renderAvatar();
 }
 
-function playForgePrototypeAnimation() {
-  const points = getZoneToZoneHandoffPoints('forge', 'library');
+function playForgeLibraryHandoffAnimation() {
+  const points = getForgeHandoffPoints();
 
   if (!points) {
     flashGuidedZone('library');
@@ -862,20 +864,70 @@ function playForgePrototypeAnimation() {
     return Promise.resolve();
   }
 
-  const duration = getMotionDuration(PROTOTYPE_HANDOFF_MS, 320);
+  const toMachineDuration = getMotionDuration(FORGE_HANDOFF_TO_MACHINE_MS, 240);
+  const machinePauseDuration = getMotionDuration(FORGE_HANDOFF_MACHINE_PAUSE_MS, 140);
+  const toLibraryDuration = getMotionDuration(FORGE_HANDOFF_TO_LIBRARY_MS, 320);
 
-  renderSingleHandoffPath(points);
+  renderHandoffPaths(points);
+  showHandoffPathPhase('toMachine');
   setHandoffMode('prototype');
-  setHandoffLabel('FIRST PROTOTYPE');
+  setHandoffLabel('PROTOTYPE');
+  setGeminiMachineProcessing(false);
   showWireframeHandoff(points.start);
 
   return new Promise((resolve) => {
-    const startedAt = getNow();
+    let phase = 'toMachine';
+    let phaseStartedAt = getNow();
+    let hasTransformed = false;
 
     const step = (timestamp) => {
-      const dynamicPoints = getZoneToZoneHandoffPoints('forge', 'library') || points;
-      const progress = easeInOut(clamp((timestamp - startedAt) / duration, 0, 1));
-      const point = getQuadraticPoint(dynamicPoints.start, dynamicPoints.control, dynamicPoints.end, progress);
+      const dynamicPoints = getForgeHandoffPoints() || points;
+
+      if (phase === 'toMachine') {
+        const progress = easeInOut(clamp((timestamp - phaseStartedAt) / toMachineDuration, 0, 1));
+        const point = getQuadraticPoint(dynamicPoints.start, dynamicPoints.toMachineControl, dynamicPoints.machineInput, progress);
+
+        showWireframeHandoff(point);
+
+        if (progress < 1) {
+          state.handoff.frameRequestId = requestFrame(step);
+          return;
+        }
+
+        phase = 'machinePause';
+        phaseStartedAt = timestamp;
+        setGeminiMachineProcessing(true);
+        updatePantherStatus('Gemini is reading the prototype...');
+        showWireframeHandoff(dynamicPoints.machineInput);
+        state.handoff.frameRequestId = requestFrame(step);
+        return;
+      }
+
+      if (phase === 'machinePause') {
+        showWireframeHandoff(dynamicPoints.machineInput);
+
+        if (!hasTransformed && timestamp - phaseStartedAt >= machinePauseDuration * 0.45) {
+          hasTransformed = true;
+          setHandoffMode('prd');
+          setHandoffLabel('CODE GUIDE');
+          showHandoffPathPhase('toForge');
+          updatePantherStatus('Gemini turned the prototype into a code guide. Follow it to Zone 2.');
+        }
+
+        if (timestamp - phaseStartedAt < machinePauseDuration) {
+          state.handoff.frameRequestId = requestFrame(step);
+          return;
+        }
+
+        phase = 'toLibrary';
+        phaseStartedAt = timestamp;
+        updatePantherStatus('The code guide is heading to The Library...');
+        state.handoff.frameRequestId = requestFrame(step);
+        return;
+      }
+
+      const progress = easeInOut(clamp((timestamp - phaseStartedAt) / toLibraryDuration, 0, 1));
+      const point = getQuadraticPoint(dynamicPoints.machineOutput, dynamicPoints.toForgeControl, dynamicPoints.forgeEntry, progress);
 
       showWireframeHandoff(point);
 
@@ -884,6 +936,7 @@ function playForgePrototypeAnimation() {
         return;
       }
 
+      setGeminiMachineProcessing(false);
       hideHandoffPaths();
       hideWireframeHandoff();
       flashGuidedZone('library');
@@ -1017,6 +1070,52 @@ function getBlueprintHandoffPoints() {
   const machineInput = getPointWithinRect(machineRect, mapRect, 0.42, 0.42);
   const machineOutput = getPointWithinRect(machineRect, mapRect, 0.54, 0.5);
   const forgeEntry = getPointWithinRect(forgeRect, mapRect, 0.76, 0.45);
+  const toMachineControl = {
+    x: start.x + (machineInput.x - start.x) * 0.5,
+    y: Math.min(start.y, machineInput.y) - curveHeight,
+  };
+  const toForgeControl = {
+    x: clamp(machineOutput.x + Math.max(78, mapRect.width * 0.12), 0, mapRect.width - 38),
+    y: ((machineOutput.y + forgeEntry.y) / 2) - curveHeight * 0.34,
+  };
+
+  return {
+    start,
+    machineInput,
+    machineOutput,
+    forgeEntry,
+    toMachineControl,
+    toForgeControl,
+  };
+}
+
+function getForgeHandoffPoints() {
+  if (!elements.mapView || !elements.geminiMachineSprite) {
+    return null;
+  }
+
+  const forgeCard = getZoneCard('forge');
+  const libraryCard = getZoneCard('library');
+
+  if (!forgeCard || !libraryCard) {
+    return null;
+  }
+
+  const mapRect = elements.mapView.getBoundingClientRect();
+
+  if (!mapRect.width || !mapRect.height) {
+    return null;
+  }
+
+  const forgeRect = forgeCard.getBoundingClientRect();
+  const libraryRect = libraryCard.getBoundingClientRect();
+  const machineRect = elements.geminiMachineSprite.getBoundingClientRect();
+  const curveHeight = Math.max(44, mapRect.height * 0.08);
+
+  const start = getPointWithinRect(forgeRect, mapRect, 0.76, 0.5);
+  const machineInput = getPointWithinRect(machineRect, mapRect, 0.42, 0.42);
+  const machineOutput = getPointWithinRect(machineRect, mapRect, 0.54, 0.5);
+  const forgeEntry = getPointWithinRect(libraryRect, mapRect, 0.76, 0.45);
   const toMachineControl = {
     x: start.x + (machineInput.x - start.x) * 0.5,
     y: Math.min(start.y, machineInput.y) - curveHeight,
