@@ -12,9 +12,9 @@ Live site: [https://lpcode808.github.io/Vibe-Coding-Explorer/](https://lpcode808
   - `The Library` — translator prompt for understanding code
   - `The Workshop` — evaluator prompt for debugging
 - Labeled map handoffs that make the workflow visible:
-  - Zone 0 emits a `WIREFRAME` token
-  - Gemini transforms it into a `PRD`
-  - Zone 1 emits a `FIRST PROTOTYPE` token toward Zone 2
+  - Zone 0 emits a `WIREFRAME` token → Gemini machine transforms it into a `PRD` → delivered to Zone 1
+  - Zone 1 copy emits a `PROTOTYPE` token → Gemini machine transforms it into a `CODE GUIDE` → delivered to Zone 2
+  - Both handoffs use the same 3-phase animation: travel to machine → machine processes and transforms token → token travels to destination
 - A full-height bottom sheet drawer with:
   - zone title
   - summary
@@ -39,7 +39,8 @@ Since the previous README update, Prompt Quest has become more of a visual learn
 
 - Zone 0 now works as a facilitation checkpoint: students confirm they understand the teacher's PRD walkthrough, then watch a `WIREFRAME` token travel to a Gemini machine.
 - The Gemini machine uses a closer Gemini-style four-color sparkle mark, and the token changes into a labeled `PRD` before traveling to Zone 1.
-- Zone 1 copy completion now produces a `FIRST PROTOTYPE` token, making the build step feel connected to the next understanding/debugging stages.
+- Zone 1 copy completion now produces a `PROTOTYPE` token that travels to the same Gemini machine, transforms into a `CODE GUIDE`, and then travels to Zone 2 — matching the Zone 0→1 handoff animation style.
+- The handoff animation is now data-driven: both zone transitions share the same underlying `playMachineHandoffAnimation(config)` function, making it straightforward to add more handoff animations between future zones.
 - The help HUD no longer stays permanently on screen; it auto-hides and can be restored with `?` or the bottom-center help button.
 - A new SVG favicon gives the tab a readable pixel-style app identity.
 
