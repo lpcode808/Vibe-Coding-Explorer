@@ -74,6 +74,22 @@ Zone IDs are stable — `app.js` and CSS reference them, and `localStorage` pers
 3. No `app.js` changes needed — it wires up every `.zone-card` it finds.
 4. Update `prompt-quest-PRD.md` if the change is structural.
 
+## When Adding a Handoff Animation Between Zones
+
+The animation infrastructure is data-driven. To add a new zone-to-zone Gemini handoff:
+
+1. Write an `async function runXHandoff(zone)` (copy the shape of `runBlueprintHandoff` or `runForgePrototypeHandoff`).
+2. Call `playMachineHandoffAnimation(config)` inside it with the config fields:
+   - `getPoints` — `() => getMachineHandoffPoints(startZoneId, endZoneId)`
+   - `initialMode` — `'wireframe'` | `'prototype'`
+   - `initialLabel` / `transformedLabel` — the token labels shown during the animation
+   - `readingStatus` / `transformedStatus` / `deliveringStatus` — status bar strings
+   - `destinationZoneId` — the zone to flash/pulse at the end
+3. Set `state.handoff.getActivePoints` to the same getter at the start of the run function, and `null` it in the `finally` block (needed for resize handling).
+4. Wire the run function into `handleCopyClick` via a zone-id check (or extract a dispatch map if there are many).
+
+No new geometry function or animation loop needed.
+
 ## When Editing Prompt Content
 
 1. Edit the source `.md` file.
@@ -90,8 +106,8 @@ Before declaring changes done:
 - [ ] Copy button writes the right `promptText` to clipboard.
 - [ ] `✅` badge appears after copy and survives page reload.
 - [ ] WASD moves the panther; SPACE on a touching zone opens the drawer.
-- [ ] Zone 0 handoff labels the first moving token `WIREFRAME`, then labels the post-Gemini token `PRD`.
-- [ ] Zone 1 copy completion emits a `FIRST PROTOTYPE` token toward Zone 2.
+- [ ] Zone 0 handoff: token labeled `WIREFRAME` travels to the Gemini machine, machine pulses, token becomes `PRD`, then travels to Zone 1.
+- [ ] Zone 1 handoff: token labeled `PROTOTYPE` travels to the Gemini machine, machine pulses, token becomes `CODE GUIDE`, then travels to Zone 2.
 - [ ] Drawer keyboard shortcuts work: `1` triggers the top action when present, `2` or Enter triggers the main action.
 - [ ] Panther Mode help auto-hides after ~3 seconds; `?` and the bottom-center `?` button show it again.
 - [ ] Music toggle defaults to OFF on fresh load; toggling on produces audible sound; toggling off silences it.
