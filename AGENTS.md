@@ -66,6 +66,7 @@ Zone IDs are stable — `app.js` and CSS reference them, and `localStorage` pers
 - Map fits 1366×768 without horizontal scroll.
 - Drawer is a full-height bottom sheet that slides up.
 - Panther avatar starts **top-center of the map** and moves with WASD / arrow keys; SPACE activates the nearest touching zone.
+- On touch devices, an on-screen D-pad (bottom-left) and a `GO` action button (bottom-right) appear automatically and mirror WASD + SPACE. The presence of touch is detected at runtime (`'ontouchstart' in window || navigator.maxTouchPoints > 0`) and adds `body.has-touch`. The touch controls hide while the drawer is open.
 
 ## When Adding a New Zone
 
@@ -108,6 +109,8 @@ Before declaring changes done:
 - [ ] WASD moves the panther; SPACE on a touching zone opens the drawer.
 - [ ] Zone 0 handoff: token labeled `WIREFRAME` travels to the Gemini machine, machine pulses, token becomes `PRD`, then travels to Zone 1.
 - [ ] Zone 1 handoff: token labeled `PROTOTYPE` travels to the Gemini machine, machine pulses, token becomes `CODE GUIDE`, then travels to Zone 2.
+- [ ] Zone 2 handoff: token labeled `CODE MAP` travels to the Gemini machine, machine pulses, token becomes `DEBUG TUTOR`, then travels to Zone 3.
+- [ ] On a touch device (or DevTools touch emulation), the on-screen D-pad and `GO` button appear; pressing a D-pad button moves the panther; pressing `GO` while touching a zone opens it; both controls hide while the drawer is open.
 - [ ] Drawer keyboard shortcuts work: `1` triggers the top action when present, `2` or Enter triggers the main action.
 - [ ] Panther Mode help auto-hides after ~3 seconds; `?` and the bottom-center `?` button show it again.
 - [ ] Music toggle defaults to OFF on fresh load; toggling on produces audible sound; toggling off silences it.

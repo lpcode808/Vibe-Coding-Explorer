@@ -14,7 +14,9 @@ Live site: [https://lpcode808.github.io/Vibe-Coding-Explorer/](https://lpcode808
 - Labeled map handoffs that make the workflow visible:
   - Zone 0 emits a `WIREFRAME` token → Gemini machine transforms it into a `PRD` → delivered to Zone 1
   - Zone 1 copy emits a `PROTOTYPE` token → Gemini machine transforms it into a `CODE GUIDE` → delivered to Zone 2
-  - Both handoffs use the same 3-phase animation: travel to machine → machine processes and transforms token → token travels to destination
+  - Zone 2 copy emits a `CODE MAP` token → Gemini machine transforms it into a `DEBUG TUTOR` → delivered to Zone 3
+  - All three handoffs use the same 3-phase animation: travel to machine → machine processes and transforms token → token travels to destination
+- On-screen touch D-pad and `GO` action button (auto-shown on touch devices) so Chromebook tablet users can move the panther and activate zones without a keyboard
 - A full-height bottom sheet drawer with:
   - zone title
   - summary
@@ -95,7 +97,6 @@ These were the main problems encountered during the build so far:
 ## Current Rough Edges
 
 - The keyboard-play mode works, but it is still lighter than a full game-style movement system.
-- Touch users currently tap zones directly; there is not yet a touch joystick or D-pad for the avatar.
 - The repository currently focuses on the live app, not a broader teacher or content management workflow.
 
 ## Suggested Upload Set
