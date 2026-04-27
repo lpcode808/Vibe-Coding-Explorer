@@ -16,6 +16,9 @@ const HANDOFF_TO_DESTINATION_MS = 3400;
 const HANDOFF_WRAPUP_MS = 280;
 const GUIDE_FLASH_MS = 1800;
 const AVATAR_SPEED = 260;
+const AVATAR_ACCEL = 1800;
+const AVATAR_DECEL = 2400;
+const AVATAR_VELOCITY_EPSILON = 6;
 const AVATAR_SIZE_FALLBACK = 88;
 const HANDOFF_AVATAR_SIZE_FALLBACK = 58;
 const AVATAR_TOUCH_PADDING_X = 10;
@@ -52,6 +55,8 @@ const state = {
   avatar: {
     x: 0,
     y: 0,
+    velocityX: 0,
+    velocityY: 0,
     facing: 'right',
     isWalking: false,
     touchingZoneId: null,
@@ -155,6 +160,7 @@ function initialize() {
   setupTouchControls();
 
   renderVisitedBadges();
+  refreshQuestComplete(false);
   resetCopyButton();
   positionAvatarAtStart(true);
   updateTouchingZone();
@@ -660,19 +666,31 @@ async function copyText(text) {
 }
 
 function markZoneVisited(zoneId) {
-  if (state.visited.has(zoneId)) {
-    return;
+  const wasVisited = state.visited.has(zoneId);
+
+  if (!wasVisited) {
+    state.visited.add(zoneId);
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...state.visited]));
+    } catch (error) {
+      console.warn('Visited state could not be saved.', error);
+    }
+
+    renderVisitedBadges();
   }
 
-  state.visited.add(zoneId);
+  refreshQuestComplete(!wasVisited);
+}
 
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...state.visited]));
-  } catch (error) {
-    console.warn('Visited state could not be saved.', error);
+function refreshQuestComplete(announce) {
+  const isComplete = state.visited.size >= zoneLookup.size;
+
+  elements.body.classList.toggle('is-quest-complete', isComplete);
+
+  if (isComplete && announce) {
+    updatePantherStatus('🏆 Quest Complete! All four zones visited. Revisit any zone any time.');
   }
-
-  renderVisitedBadges();
 }
 
 function renderVisitedBadges() {
@@ -738,32 +756,57 @@ function updateAvatar(deltaSeconds) {
   }
 
   const movement = getMovementVector();
+  const magnitude = Math.hypot(movement.x, movement.y) || 0;
+  const targetVx = magnitude === 0 ? 0 : (movement.x / magnitude) * AVATAR_SPEED;
+  const targetVy = magnitude === 0 ? 0 : (movement.y / magnitude) * AVATAR_SPEED;
+  const accelX = movement.x === 0 ? AVATAR_DECEL : AVATAR_ACCEL;
+  const accelY = movement.y === 0 ? AVATAR_DECEL : AVATAR_ACCEL;
 
-  if (movement.x === 0 && movement.y === 0) {
-    state.avatar.isWalking = false;
-    renderAvatar();
-    updateTouchingZone();
-    return;
+  if (prefersReducedMotion()) {
+    state.avatar.velocityX = targetVx;
+    state.avatar.velocityY = targetVy;
+  } else {
+    state.avatar.velocityX = approachLinear(state.avatar.velocityX, targetVx, accelX * deltaSeconds);
+    state.avatar.velocityY = approachLinear(state.avatar.velocityY, targetVy, accelY * deltaSeconds);
   }
 
-  const distance = AVATAR_SPEED * deltaSeconds;
-  const magnitude = Math.hypot(movement.x, movement.y) || 1;
-  const nextX = state.avatar.x + (movement.x / magnitude) * distance;
-  const nextY = state.avatar.y + (movement.y / magnitude) * distance;
+  const desiredX = state.avatar.x + state.avatar.velocityX * deltaSeconds;
+  const desiredY = state.avatar.y + state.avatar.velocityY * deltaSeconds;
 
-  state.avatar.x = nextX;
-  state.avatar.y = nextY;
-  state.avatar.isWalking = true;
+  state.avatar.x = desiredX;
+  state.avatar.y = desiredY;
+  clampAvatarPosition();
 
-  if (movement.x < 0) {
+  if (state.avatar.x !== desiredX) {
+    state.avatar.velocityX = 0;
+  }
+  if (state.avatar.y !== desiredY) {
+    state.avatar.velocityY = 0;
+  }
+
+  const speedSq =
+    state.avatar.velocityX * state.avatar.velocityX +
+    state.avatar.velocityY * state.avatar.velocityY;
+  state.avatar.isWalking = speedSq > AVATAR_VELOCITY_EPSILON * AVATAR_VELOCITY_EPSILON;
+
+  if (state.avatar.velocityX < -AVATAR_VELOCITY_EPSILON) {
     state.avatar.facing = 'left';
-  } else if (movement.x > 0) {
+  } else if (state.avatar.velocityX > AVATAR_VELOCITY_EPSILON) {
     state.avatar.facing = 'right';
   }
 
-  clampAvatarPosition();
   renderAvatar();
   updateTouchingZone();
+}
+
+function approachLinear(current, target, maxDelta) {
+  const diff = target - current;
+
+  if (Math.abs(diff) <= maxDelta) {
+    return target;
+  }
+
+  return current + Math.sign(diff) * maxDelta;
 }
 
 function getMovementVector() {
@@ -815,6 +858,8 @@ function positionAvatarAtStart(forceReset) {
   if (forceReset || !state.avatar.hasPlaced) {
     state.avatar.x = targetX;
     state.avatar.y = targetY;
+    state.avatar.velocityX = 0;
+    state.avatar.velocityY = 0;
   }
 
   state.avatar.hasPlaced = true;
@@ -927,6 +972,8 @@ function updatePantherStatus(message) {
 
 function clearMovementKeys() {
   state.avatar.keys.clear();
+  state.avatar.velocityX = 0;
+  state.avatar.velocityY = 0;
   state.avatar.isWalking = false;
   elements.touchKeys.forEach(({ button }) => {
     if (button) {
