@@ -111,6 +111,14 @@ const elements = {
   pantherAvatar: document.getElementById('panther-avatar'),
   pantherStatus: document.getElementById('panther-status'),
   musicToggle: document.getElementById('music-toggle'),
+  touchPad: document.getElementById('touch-pad'),
+  touchAction: document.getElementById('touch-action'),
+  touchKeys: [
+    { button: document.getElementById('touch-up'), code: 'KeyW' },
+    { button: document.getElementById('touch-down'), code: 'KeyS' },
+    { button: document.getElementById('touch-left'), code: 'KeyA' },
+    { button: document.getElementById('touch-right'), code: 'KeyD' },
+  ],
 };
 
 initialize();
@@ -143,6 +151,8 @@ function initialize() {
   document.addEventListener('keyup', handleKeyUp);
   window.addEventListener('blur', handleWindowBlur);
   window.addEventListener('resize', handleResize);
+
+  setupTouchControls();
 
   renderVisitedBadges();
   resetCopyButton();
@@ -374,6 +384,11 @@ async function handleCopyClick() {
       await runForgePrototypeHandoff(zone);
       return;
     }
+
+    if (zone.id === 'library') {
+      await runLibraryHandoff(zone);
+      return;
+    }
   } catch (error) {
     console.error('Prompt copy failed.', error);
     setCopyButtonState(COPY_ERROR_LABEL, 'is-error');
@@ -413,6 +428,47 @@ async function runForgePrototypeHandoff(zone) {
       destinationZoneId: 'library',
     });
     updatePantherStatus('Code guide ready. Next stop: The Library.');
+    await delay(getMotionDuration(HANDOFF_WRAPUP_MS, 120));
+  } finally {
+    setGeminiMachineProcessing(false);
+    hideHandoffPaths();
+    hideWireframeHandoff();
+    state.handoff.isAnimating = false;
+    state.handoff.getActivePoints = null;
+    focusMapView();
+  }
+}
+
+async function runLibraryHandoff(zone) {
+  if (state.handoff.isAnimating) {
+    return;
+  }
+
+  state.handoff.isAnimating = true;
+  state.handoff.getActivePoints = () => getMachineHandoffPoints('library', 'workshop');
+  clearMovementKeys();
+  setCopyButtonState('CODE EXPLAINED!', 'is-copied');
+  updatePantherStatus('Your code map is heading to Gemini...');
+
+  try {
+    await delay(getMotionDuration(HANDOFF_CONFIRM_MS, 80));
+
+    if (state.activeZoneId === zone.id) {
+      closeDrawer();
+    }
+
+    await delay(getMotionDuration(DRAWER_CLOSE_MS, 80));
+    await playMachineHandoffAnimation({
+      getPoints: state.handoff.getActivePoints,
+      initialMode: 'prototype',
+      initialLabel: 'CODE MAP',
+      transformedLabel: 'DEBUG TUTOR',
+      readingStatus: 'Gemini is reading the code map...',
+      transformedStatus: 'Gemini turned the code map into a debug tutor. Follow it to Zone 3.',
+      deliveringStatus: 'The debug tutor is heading to The Workshop...',
+      destinationZoneId: 'workshop',
+    });
+    updatePantherStatus('Debug tutor ready. Next stop: The Workshop.');
     await delay(getMotionDuration(HANDOFF_WRAPUP_MS, 120));
   } finally {
     setGeminiMachineProcessing(false);
@@ -872,7 +928,95 @@ function updatePantherStatus(message) {
 function clearMovementKeys() {
   state.avatar.keys.clear();
   state.avatar.isWalking = false;
+  elements.touchKeys.forEach(({ button }) => {
+    if (button) {
+      button.classList.remove('is-pressed');
+    }
+  });
   renderAvatar();
+}
+
+function setupTouchControls() {
+  const isTouch =
+    'ontouchstart' in window ||
+    (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+
+  if (!isTouch) {
+    return;
+  }
+
+  document.body.classList.add('has-touch');
+
+  elements.touchKeys.forEach(({ button, code }) => {
+    if (!button) {
+      return;
+    }
+
+    const press = (event) => {
+      event.preventDefault();
+
+      if (state.handoff.isAnimating || state.activeZoneId) {
+        return;
+      }
+
+      if (typeof button.setPointerCapture === 'function' && event.pointerId != null) {
+        try {
+          button.setPointerCapture(event.pointerId);
+        } catch (error) {
+          // Capture may fail on some browsers; harmless.
+        }
+      }
+
+      state.avatar.keys.add(code);
+      button.classList.add('is-pressed');
+    };
+
+    const release = (event) => {
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+
+      if (
+        event &&
+        event.pointerId != null &&
+        typeof button.releasePointerCapture === 'function' &&
+        button.hasPointerCapture &&
+        button.hasPointerCapture(event.pointerId)
+      ) {
+        try {
+          button.releasePointerCapture(event.pointerId);
+        } catch (error) {
+          // Release may fail; harmless.
+        }
+      }
+
+      state.avatar.keys.delete(code);
+      button.classList.remove('is-pressed');
+    };
+
+    button.addEventListener('pointerdown', press);
+    button.addEventListener('pointerup', release);
+    button.addEventListener('pointercancel', release);
+    button.addEventListener('lostpointercapture', release);
+    button.addEventListener('contextmenu', (event) => event.preventDefault());
+  });
+
+  if (elements.touchAction) {
+    elements.touchAction.addEventListener('click', (event) => {
+      event.preventDefault();
+
+      if (state.handoff.isAnimating || state.activeZoneId) {
+        return;
+      }
+
+      if (state.avatar.touchingZoneId) {
+        openZone(state.avatar.touchingZoneId);
+        return;
+      }
+
+      updatePantherStatus('Walk closer to a zone, then tap GO.');
+    });
+  }
 }
 
 function playMachineHandoffAnimation(config) {
