@@ -111,6 +111,9 @@ Before declaring changes done:
 - [ ] Zone 1 handoff: token labeled `PROTOTYPE` travels to the Gemini machine, machine pulses, token becomes `CODE GUIDE`, then travels to Zone 2.
 - [ ] Zone 2 handoff: token labeled `CODE MAP` travels to the Gemini machine, machine pulses, token becomes `DEBUG TUTOR`, then travels to Zone 3.
 - [ ] On a touch device (or DevTools touch emulation), the on-screen D-pad and `GO` button appear; pressing a D-pad button moves the panther; pressing `GO` while touching a zone opens it; both controls hide while the drawer is open.
+- [ ] Panther walk has a brief acceleration / deceleration (no abrupt start/stop). Pressing into a wall does not "store" velocity; the panther stops cleanly at the edge.
+- [ ] Touching-zone feedback: while the panther overlaps a zone card, the card has a subtle breathing pulse (suspended under `prefers-reduced-motion`).
+- [ ] Quest Complete: after the fourth zone is marked visited, the panther status reads "🏆 Quest Complete!" and every zone badge gains a gold gradient + soft pulse. The state survives reload (driven by `body.is-quest-complete` on init).
 - [ ] Drawer keyboard shortcuts work: `1` triggers the top action when present, `2` or Enter triggers the main action.
 - [ ] Panther Mode help auto-hides after ~3 seconds; `?` and the bottom-center `?` button show it again.
 - [ ] Music toggle defaults to OFF on fresh load; toggling on produces audible sound; toggling off silences it.

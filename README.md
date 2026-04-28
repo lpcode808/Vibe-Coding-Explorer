@@ -17,6 +17,8 @@ Live site: [https://lpcode808.github.io/Vibe-Coding-Explorer/](https://lpcode808
   - Zone 2 copy emits a `CODE MAP` token → Gemini machine transforms it into a `DEBUG TUTOR` → delivered to Zone 3
   - All three handoffs use the same 3-phase animation: travel to machine → machine processes and transforms token → token travels to destination
 - On-screen touch D-pad and `GO` action button (auto-shown on touch devices) so Chromebook tablet users can move the panther and activate zones without a keyboard
+- Smooth panther walk with light acceleration / deceleration (instant response when `prefers-reduced-motion` is on)
+- A breathing highlight on the zone card the panther is touching, plus a "Quest Complete!" celebration that lights up all visited badges once every zone has been opened
 - A full-height bottom sheet drawer with:
   - zone title
   - summary
@@ -96,8 +98,8 @@ These were the main problems encountered during the build so far:
 
 ## Current Rough Edges
 
-- The keyboard-play mode works, but it is still lighter than a full game-style movement system.
 - The repository currently focuses on the live app, not a broader teacher or content management workflow.
+- No automated test suite yet — verification is the manual checklist in `AGENTS.md`.
 
 ## Suggested Upload Set
 

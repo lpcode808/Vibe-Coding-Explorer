@@ -691,6 +691,25 @@ body.has-touch.drawer-open .touch-action {
     0 14px 0 var(--card-shadow),
     0 0 0 6px rgba(105, 246, 232, 0.18),
     0 0 24px var(--panther-glow);
+  animation: zone-breathing 1.6s ease-in-out infinite;
+}
+
+@keyframes zone-breathing {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    box-shadow:
+      0 14px 0 var(--card-shadow),
+      0 0 0 6px rgba(105, 246, 232, 0.18),
+      0 0 24px var(--panther-glow);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.012);
+    box-shadow:
+      0 16px 0 var(--card-shadow),
+      0 0 0 8px rgba(105, 246, 232, 0.32),
+      0 0 36px rgba(135, 240, 231, 0.5);
+  }
 }
 
 .zone-card.is-guided {
@@ -749,6 +768,27 @@ body.has-touch.drawer-open .touch-action {
 
 .zone-badge[hidden] {
   display: none;
+}
+
+body.is-quest-complete .zone-badge {
+  background: linear-gradient(180deg, #f6c013 0%, #e09120 100%);
+  color: #3f2914;
+  box-shadow:
+    0 4px 0 rgba(78, 54, 25, 0.4),
+    0 0 18px rgba(246, 192, 19, 0.55);
+  animation: badge-victory 1.8s ease-in-out infinite;
+}
+
+@keyframes badge-victory {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.08);
+    filter: brightness(1.15);
+  }
 }
 
 .panther-avatar {
