@@ -19,6 +19,8 @@ Live site: [https://lpcode808.github.io/Vibe-Coding-Explorer/](https://lpcode808
 - On-screen touch D-pad and `GO` action button (auto-shown on touch devices) so Chromebook tablet users can move the panther and activate zones without a keyboard
 - Smooth panther walk with light acceleration / deceleration (instant response when `prefers-reduced-motion` is on)
 - A breathing highlight on the zone card the panther is touching, plus a "Quest Complete!" celebration that lights up all visited badges once every zone has been opened
+- 3-step music toggle: off → quiet (🔈) → loud (🔊) → off, cycling through each click
+- Teacher progress view at `?teacher=1` — a modal overlay that reads localStorage and shows which zones the student has visited, with a "Copy Summary" button for sharing progress
 - A full-height bottom sheet drawer with:
   - zone title
   - summary
