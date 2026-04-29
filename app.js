@@ -28,6 +28,7 @@ const MOVEMENT_CODES = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'Arro
 const ACTIVATION_CODES = new Set(['Space', 'Enter']);
 
 const MUSIC_MASTER_GAIN = 0.16;
+const MUSIC_LEVEL_GAINS = [0, 0.08, 0.16];
 const MUSIC_CHORD_SECONDS = 4.0;
 const MUSIC_CHORDS = [
   [220.00, 261.63, 329.63],
@@ -73,6 +74,7 @@ const state = {
     filter: null,
     delay: null,
     isOn: false,
+    level: 0,
     patternIndex: 0,
     nextTime: 0,
     scheduler: null,
@@ -118,6 +120,11 @@ const elements = {
   musicToggle: document.getElementById('music-toggle'),
   touchPad: document.getElementById('touch-pad'),
   touchAction: document.getElementById('touch-action'),
+  teacherPanel: document.getElementById('teacher-panel'),
+  teacherZoneList: document.getElementById('teacher-zone-list'),
+  teacherTally: document.getElementById('teacher-tally'),
+  teacherCopy: document.getElementById('teacher-copy'),
+  teacherClose: document.getElementById('teacher-close'),
   touchKeys: [
     { button: document.getElementById('touch-up'), code: 'KeyW' },
     { button: document.getElementById('touch-down'), code: 'KeyS' },
@@ -158,6 +165,7 @@ function initialize() {
   window.addEventListener('resize', handleResize);
 
   setupTouchControls();
+  initTeacherPanel();
 
   renderVisitedBadges();
   refreshQuestComplete(false);
@@ -1066,6 +1074,114 @@ function setupTouchControls() {
   }
 }
 
+function initTeacherPanel() {
+  const params = new URLSearchParams(window.location.search);
+
+  if (!params.has('teacher')) {
+    return;
+  }
+
+  if (!elements.teacherPanel) {
+    return;
+  }
+
+  renderTeacherPanel();
+
+  if (elements.teacherCopy) {
+    elements.teacherCopy.addEventListener('click', handleTeacherCopy);
+  }
+
+  if (elements.teacherClose) {
+    elements.teacherClose.addEventListener('click', () => {
+      elements.teacherPanel.hidden = true;
+      history.replaceState(null, '', window.location.pathname);
+      focusMapView();
+    });
+  }
+
+  elements.teacherPanel.hidden = false;
+}
+
+function renderTeacherPanel() {
+  const zones = window.ZONES || [];
+  const visited = loadVisitedSet();
+
+  if (!elements.teacherZoneList) {
+    return;
+  }
+
+  elements.teacherZoneList.replaceChildren(
+    ...zones.map((zone) => {
+      const isDone = visited.has(zone.id);
+      const item = document.createElement('li');
+
+      item.className = `teacher-zone-item${isDone ? ' is-done' : ''}`;
+      item.innerHTML = `
+        <span class="teacher-zone-status" aria-hidden="true">${isDone ? '✅' : '⬜'}</span>
+        <span>
+          <span class="teacher-zone-name">${zone.emoji} ${zone.name}</span><br>
+          <span class="teacher-zone-tagline">"${zone.tagline}"${isDone ? ' — visited' : ' — not yet'}</span>
+        </span>
+      `;
+
+      return item;
+    })
+  );
+
+  const visitedCount = visited.size;
+  const total = zones.length;
+
+  if (elements.teacherTally) {
+    elements.teacherTally.textContent =
+      visitedCount === total
+        ? `🏆 Quest Complete — all ${total} zones visited!`
+        : `${visitedCount} of ${total} zones visited`;
+  }
+}
+
+async function handleTeacherCopy() {
+  const zones = window.ZONES || [];
+  const visited = loadVisitedSet();
+
+  const lines = [
+    'Prompt Quest Progress',
+    '─'.repeat(28),
+    ...zones.map((zone) => {
+      const mark = visited.has(zone.id) ? '✅' : '⬜';
+      return `${mark}  Zone ${zones.indexOf(zone)} – ${zone.name} (${zone.tagline})`;
+    }),
+    '─'.repeat(28),
+    visited.size === zones.length
+      ? `🏆 Quest Complete — all ${zones.length} zones visited`
+      : `Progress: ${visited.size} of ${zones.length} zones visited`,
+  ];
+
+  const text = lines.join('\n');
+
+  if (elements.teacherCopy) {
+    elements.teacherCopy.disabled = true;
+  }
+
+  try {
+    await copyText(text);
+
+    if (elements.teacherCopy) {
+      elements.teacherCopy.textContent = '✅ Copied!';
+    }
+  } catch (error) {
+    if (elements.teacherCopy) {
+      elements.teacherCopy.textContent = '⚠ Copy failed';
+    }
+  } finally {
+    window.setTimeout(() => {
+      if (elements.teacherCopy) {
+        elements.teacherCopy.textContent = '📋 Copy Summary';
+        elements.teacherCopy.disabled = false;
+      }
+    }, 2000);
+  }
+}
+
 function playMachineHandoffAnimation(config) {
   const {
     getPoints,
@@ -1499,14 +1615,37 @@ function delay(ms) {
 }
 
 function handleMusicToggle() {
-  if (state.music.isOn) {
-    stopMusic();
-  } else {
-    startMusic();
-  }
-  renderMusicToggleState();
-  persistMusicPreference(state.music.isOn);
+  const nextLevel = (state.music.level + 1) % MUSIC_LEVEL_GAINS.length;
+  setMusicLevel(nextLevel);
   focusMapView();
+}
+
+function setMusicLevel(level) {
+  state.music.level = level;
+
+  if (level === 0) {
+    stopMusic();
+  } else if (!state.music.isOn) {
+    startMusic();
+  } else {
+    applyMusicGain();
+  }
+
+  renderMusicToggleState();
+  persistMusicPreference(level);
+}
+
+function applyMusicGain() {
+  if (!state.music.master || !state.music.ctx) {
+    return;
+  }
+
+  const targetGain = MUSIC_LEVEL_GAINS[state.music.level] ?? MUSIC_MASTER_GAIN;
+  const now = state.music.ctx.currentTime;
+
+  state.music.master.gain.cancelScheduledValues(now);
+  state.music.master.gain.setValueAtTime(state.music.master.gain.value, now);
+  state.music.master.gain.linearRampToValueAtTime(targetGain, now + 0.5);
 }
 
 function renderMusicToggleState() {
@@ -1516,31 +1655,29 @@ function renderMusicToggleState() {
 
   const icon = elements.musicToggle.querySelector('.music-icon');
   const label = elements.musicToggle.querySelector('.music-label');
-  const isOn = state.music.isOn;
+  const level = state.music.level;
 
-  elements.musicToggle.classList.toggle('is-on', isOn);
-  elements.musicToggle.setAttribute('aria-pressed', String(isOn));
-  elements.musicToggle.setAttribute(
-    'aria-label',
-    isOn ? 'Turn background music off' : 'Turn background music on'
-  );
-  elements.musicToggle.setAttribute(
-    'title',
-    isOn ? 'Background music is on' : 'Background music is off'
-  );
+  elements.musicToggle.classList.toggle('is-on', level > 0);
+  elements.musicToggle.setAttribute('aria-pressed', level > 0 ? 'true' : 'false');
+
+  const levelLabels = ['Turn music on (quiet)', 'Set music to loud', 'Turn music off'];
+  const levelTitles = ['Music off', 'Music: quiet', 'Music: loud'];
+
+  elements.musicToggle.setAttribute('aria-label', levelLabels[level] ?? levelLabels[0]);
+  elements.musicToggle.setAttribute('title', levelTitles[level] ?? levelTitles[0]);
 
   if (icon) {
-    icon.textContent = isOn ? '🎵' : '🔇';
+    icon.textContent = level === 2 ? '🔊' : level === 1 ? '🔈' : '🔇';
   }
 
   if (label) {
-    label.textContent = isOn ? 'Music' : 'Music';
+    label.textContent = level === 2 ? 'Loud' : level === 1 ? 'Quiet' : 'Music';
   }
 }
 
-function persistMusicPreference(isOn) {
+function persistMusicPreference(level) {
   try {
-    localStorage.setItem(MUSIC_STORAGE_KEY, isOn ? '1' : '0');
+    localStorage.setItem(MUSIC_STORAGE_KEY, String(level));
   } catch (error) {
     console.warn('Music preference could not be saved.', error);
   }
@@ -1650,9 +1787,11 @@ function startMusic() {
   state.music.nextTime = ctx.currentTime + 0.15;
 
   const now = ctx.currentTime;
+  const targetGain = MUSIC_LEVEL_GAINS[state.music.level] ?? MUSIC_MASTER_GAIN;
+
   state.music.master.gain.cancelScheduledValues(now);
   state.music.master.gain.setValueAtTime(state.music.master.gain.value, now);
-  state.music.master.gain.linearRampToValueAtTime(MUSIC_MASTER_GAIN, now + 1.0);
+  state.music.master.gain.linearRampToValueAtTime(targetGain, now + 1.0);
 
   scheduleMusicBar();
 }

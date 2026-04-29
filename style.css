@@ -1309,6 +1309,126 @@ body.is-quest-complete .zone-badge {
   }
 }
 
+.teacher-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 4vw, 32px);
+  background: rgba(23, 14, 8, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.teacher-panel[hidden] {
+  display: none;
+}
+
+.teacher-panel-inner {
+  width: min(100%, 480px);
+  padding: clamp(20px, 4vw, 32px);
+  border: 4px solid var(--hud-border);
+  border-radius: 24px;
+  background: linear-gradient(180deg, var(--hud-top) 0%, var(--hud-bottom) 100%);
+  box-shadow:
+    0 16px 0 rgba(23, 14, 8, 0.4),
+    0 0 0 4px rgba(255, 250, 234, 0.08);
+  color: #fff7d2;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.teacher-panel-title {
+  margin: 0;
+  font-size: clamp(0.7rem, 1.4vw, 1rem);
+  line-height: 1.5;
+}
+
+.teacher-panel-sub {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(255, 247, 210, 0.7);
+}
+
+.teacher-zone-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.teacher-zone-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 247, 210, 0.06);
+  border: 2px solid rgba(255, 234, 166, 0.2);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.teacher-zone-item.is-done {
+  border-color: rgba(143, 243, 230, 0.38);
+  background: rgba(143, 243, 230, 0.08);
+}
+
+.teacher-zone-status {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.teacher-zone-name {
+  font-weight: 600;
+  color: #fff7d2;
+}
+
+.teacher-zone-tagline {
+  font-size: 0.85rem;
+  color: rgba(255, 247, 210, 0.6);
+}
+
+.teacher-tally {
+  margin: 0;
+  font-size: clamp(0.52rem, 0.9vw, 0.68rem);
+  color: #8ff3e6;
+}
+
+.teacher-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.teacher-actions .copy-button {
+  flex: 1;
+  min-width: 140px;
+}
+
+.teacher-close {
+  flex: 0 0 auto;
+  min-height: 48px;
+  padding: 10px 20px;
+  border: 3px solid rgba(255, 234, 166, 0.5);
+  border-radius: 14px;
+  background: rgba(255, 234, 166, 0.08);
+  color: #fff7d2;
+  font-size: clamp(0.46rem, 0.74vw, 0.6rem);
+  cursor: pointer;
+  transition: background 0.18s ease;
+  touch-action: manipulation;
+}
+
+.teacher-close:hover,
+.teacher-close:focus-visible {
+  outline: none;
+  background: rgba(255, 234, 166, 0.18);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -116,7 +116,8 @@ Before declaring changes done:
 - [ ] Quest Complete: after the fourth zone is marked visited, the panther status reads "🏆 Quest Complete!" and every zone badge gains a gold gradient + soft pulse. The state survives reload (driven by `body.is-quest-complete` on init).
 - [ ] Drawer keyboard shortcuts work: `1` triggers the top action when present, `2` or Enter triggers the main action.
 - [ ] Panther Mode help auto-hides after ~3 seconds; `?` and the bottom-center `?` button show it again.
-- [ ] Music toggle defaults to OFF on fresh load; toggling on produces audible sound; toggling off silences it.
+- [ ] Music toggle cycles three steps: off → quiet (🔈) → loud (🔊) → off. Each step changes gain smoothly; audio never clicks.
+- [ ] Teacher view: open `index.html?teacher=1`. A modal overlay lists every zone with ✅/⬜ status and a tally. "Copy Summary" writes a formatted text block to clipboard. "Close" dismisses the panel and removes the `?teacher=1` query param.
 - [ ] No horizontal scroll at 1366×768.
 - [ ] Drawer closes on ✕, scrim tap, and Escape key.
 
